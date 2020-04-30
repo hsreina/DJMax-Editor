@@ -1,0 +1,601 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="12.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">x86</Platform>
+    <ProductVersion>8.0.30703</ProductVersion>
+    <SchemaVersion>2.0</SchemaVersion>
+    <ProjectGuid>{70C08187-A203-4834-9B76-423AA16CB77A}</ProjectGuid>
+    <OutputType>WinExe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>DJMaxEditor</RootNamespace>
+    <AssemblyName>DJMaxEditor</AssemblyName>
+    <TargetFrameworkVersion>v4.6.1</TargetFrameworkVersion>
+    <TargetFrameworkProfile>
+    </TargetFrameworkProfile>
+    <FileAlignment>512</FileAlignment>
+    <IsWebBootstrapper>false</IsWebBootstrapper>
+    <PublishUrl>C:\Users\HSReina\Desktop\projects\dev\DJMax\DJMaxEditor\published\</PublishUrl>
+    <Install>true</Install>
+    <InstallFrom>Disk</InstallFrom>
+    <UpdateEnabled>false</UpdateEnabled>
+    <UpdateMode>Foreground</UpdateMode>
+    <UpdateInterval>7</UpdateInterval>
+    <UpdateIntervalUnits>Days</UpdateIntervalUnits>
+    <UpdatePeriodically>false</UpdatePeriodically>
+    <UpdateRequired>false</UpdateRequired>
+    <MapFileExtensions>true</MapFileExtensions>
+    <WebPage>publish.htm</WebPage>
+    <ApplicationRevision>6</ApplicationRevision>
+    <ApplicationVersion>1.1.0.%2a</ApplicationVersion>
+    <UseApplicationTrust>false</UseApplicationTrust>
+    <PublishWizardCompleted>true</PublishWizardCompleted>
+    <BootstrapperEnabled>true</BootstrapperEnabled>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>TRACE;DEBUG</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|x86' ">
+    <PlatformTarget>x86</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+    <Prefer32Bit>false</Prefer32Bit>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestCertificateThumbprint>97EFAAD041740E1A2C0401960C8A12B9B45C4AC3</ManifestCertificateThumbprint>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ManifestKeyFile>DJMaxEditor_TemporaryKey.pfx</ManifestKeyFile>
+  </PropertyGroup>
+  <PropertyGroup>
+    <GenerateManifests>true</GenerateManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <SignManifests>false</SignManifests>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationIcon>arrow.ico</ApplicationIcon>
+  </PropertyGroup>
+  <PropertyGroup>
+    <StartupObject>DJMaxEditor.Program</StartupObject>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Owin, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Owin.4.0.0\lib\net451\Microsoft.Owin.dll</HintPath>
+    </Reference>
+    <Reference Include="Owin, Version=1.0.0.0, Culture=neutral, PublicKeyToken=f0ebd12fd5e55cc5, processorArchitecture=MSIL">
+      <HintPath>..\packages\Owin.1.0\lib\net40\Owin.dll</HintPath>
+    </Reference>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Deployment" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Xml" />
+    <Reference Include="WindowsBase" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AboutForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="AboutForm.Designer.cs">
+      <DependentUpon>AboutForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="AudioPlayer\AudioPlayerFmodEx.cs" />
+    <Compile Include="Controls\Editor\EditorRenderControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Editor\EditorRenderControl.Designer.cs">
+      <DependentUpon>EditorRenderControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\Editor\FrameRateLimiter.cs" />
+    <Compile Include="Controls\Editor\Handlers\ChangeEventDataPositionHandler.cs" />
+    <Compile Include="Controls\Editor\Handlers\EventDataHandler.cs" />
+    <Compile Include="Controls\Editor\GraphicsWrapper.cs" />
+    <Compile Include="Controls\Editor\Handlers\EventRequestHandler.cs" />
+    <Compile Include="Controls\Editor\Renderers\EventsRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\Cyclon\CyclonEventRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\EventDisplayMode.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\Null\NullEventRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\Technika\TechnikaEventRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\EventRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Events\Trilogy\TrilogyEventRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Renderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\TracksRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\ZonesRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Cyclon\CyclonZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Null\NullZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Respect\Respect5kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Technika\TechnikaZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Trilogy\Trilogy4kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Trilogy\Trilogy5kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Trilogy\Trilogy6kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Trilogy\Trilogy7kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\Trilogy\Trilogy8kZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\Renderers\Zones\ZoneRenderer.cs" />
+    <Compile Include="Controls\Editor\RenderTimer.cs" />
+    <Compile Include="DJMax\EventAttribute.cs" />
+    <Compile Include="DJMax\EventData.cs" />
+    <Compile Include="DJMax\EventType.cs" />
+    <Compile Include="DJMax\InstrumentData.cs" />
+    <Compile Include="DJMax\PlayerDataEvents.cs" />
+    <Compile Include="DJMax\TrackData.cs" />
+    <Compile Include="DJMax\TracksList.cs" />
+    <Compile Include="Files\bms\BMESaveFile.cs" />
+    <Compile Include="ColorScheme.cs" />
+    <Compile Include="Files\bms\SaveSettingsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Files\bms\SaveSettingsDialog.Designer.cs">
+      <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Files\File.cs" />
+    <Compile Include="Files\FilesHandler.cs" />
+    <Compile Include="Files\IOpenFile.cs" />
+    <Compile Include="Files\ISaveFile.cs" />
+    <Compile Include="Files\Loadhandler.cs" />
+    <Compile Include="Files\pt\PTFile.cs" />
+    <Compile Include="Files\pt\PTSaveFile.cs" />
+    <Compile Include="Files\pt\SaveSettingsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Files\pt\SaveSettingsDialog.Designer.cs">
+      <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Files\SaveHandler.cs" />
+    <Compile Include="Files\bytes\TQOpenFile.cs" />
+    <Compile Include="libs\fmod\fmod\fmod.cs" />
+    <Compile Include="libs\fmod\fmod\fmod_dsp.cs" />
+    <Compile Include="libs\fmod\fmod\fmod_errors.cs" />
+    <Compile Include="libs\FormUpload.cs" />
+    <Compile Include="libs\GDI.cs" />
+    <Compile Include="libs\Serializer.cs" />
+    <Compile Include="libs\Singleton.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\AutoHideStripBase.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockAreasEditor.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockContent.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockContentCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockContentEventArgs.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockContentHandler.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockOutlineBase.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockPane.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPane.SplitterControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPaneCaptionBase.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPaneCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.Appearance.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.AutoHideWindow.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.DockDragHandler.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.DragHandler.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.FocusManager.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.MdiClientController.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.Persistor.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanel.SplitterDragHandler.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockPanelExtender.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockPanelSkin.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DockPaneStripBase.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockWindow.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockWindow.SplitterControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DockWindowCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\DragForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\DummyControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\Enums.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\FloatWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\FloatWindowCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Helpers\DockHelper.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Helpers\DrawHelper.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Helpers\ResourceHelper.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Helpers\Win32Helper.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\InertButtonBase.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\Interfaces.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Localization.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Measures.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\NestedDockingStatus.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\NestedPaneCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Skins\DockPanelSkinBuilder.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Skins\Style.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\SplitterBase.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\VisibleNestedPaneCollection.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\VS2005AutoHideStrip.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\VS2005DockPaneCaption.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\VS2005DockPaneStrip.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="libs\WinFormsUI\Docking\Win32\Enums.cs" />
+    <Compile Include="libs\WinFormsUI\Docking\Win32\NativeMethods.cs" />
+    <Compile Include="LoadingForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="LoadingForm.Designer.cs">
+      <DependentUpon>LoadingForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Panels\AudioListForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\AudioListForm.Designer.cs">
+      <DependentUpon>AudioListForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="AudioPlayer\AudioPlayer.cs" />
+    <Compile Include="Panels\DebugOutput.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\DebugOutput.Designer.cs">
+      <DependentUpon>DebugOutput.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Drag.cs" />
+    <Compile Include="Panels\EditorForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\EditorForm.Designer.cs">
+      <DependentUpon>EditorForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Controls\Editor\EventSelect\EventSelectMode.cs" />
+    <Compile Include="Panels\EventsListForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\EventsListForm.Designer.cs">
+      <DependentUpon>EventsListForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Panels\FModForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\FModForm.Designer.cs">
+      <DependentUpon>FModForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Panels\NoteSelectForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\NoteSelectForm.Designer.cs">
+      <DependentUpon>NoteSelectForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Panels\PerformancesForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\PerformancesForm.Designer.cs">
+      <DependentUpon>PerformancesForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Panels\PropertiesForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\PropertiesForm.Designer.cs">
+      <DependentUpon>PropertiesForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="libs\ByteArrayStream.cs" />
+    <Compile Include="DJMRessources.cs" />
+    <Compile Include="Controls\Editor\EditorControl.cs">
+      <SubType>UserControl</SubType>
+    </Compile>
+    <Compile Include="Controls\Editor\EditorControl.Designer.cs">
+      <DependentUpon>EditorControl.cs</DependentUpon>
+    </Compile>
+    <Compile Include="MainForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="MainForm.Designer.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="libs\fmod\fmodex\fmod.cs" />
+    <Compile Include="libs\fmod\fmodex\fmod_dsp.cs" />
+    <Compile Include="libs\fmod\fmodex\fmod_errors.cs" />
+    <Compile Include="libs\fmod\fmodex\fmod_memoryinfo.cs" />
+    <Compile Include="Logs.cs" />
+    <Compile Include="PlayerEventsListProxy.cs" />
+    <Compile Include="ProgressBar.cs" />
+    <Compile Include="PropertyLayer\BeatEventPropertiesLayer.cs" />
+    <Compile Include="PropertyLayer\NoteEventPropertiesLayer.cs" />
+    <Compile Include="PropertyLayer\PropertiesLayerBase.cs" />
+    <Compile Include="PropertyLayer\TempoEventPropertiesLayer.cs" />
+    <Compile Include="PropertyLayer\VolumeEventPropertiesLayer.cs" />
+    <Compile Include="Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DesignTime>True</DesignTime>
+      <DependentUpon>Resources.resx</DependentUpon>
+    </Compile>
+    <Compile Include="DJMax\Player.cs" />
+    <Compile Include="DJMax\PlayerData.cs" />
+    <Compile Include="libs\CustomTimer.cs" />
+    <Compile Include="Program.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Files\pt\PTOpenFile.cs" />
+    <Compile Include="Panels\ToolWindow.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Panels\ToolWindow.designer.cs">
+      <DependentUpon>ToolWindow.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Undo\Action\AddEventAction.cs" />
+    <Compile Include="Undo\Action\AddInstrumentEventAction.cs" />
+    <Compile Include="Undo\Action\MoveEventAction.cs" />
+    <Compile Include="Undo\Action\RemoveEventAction.cs" />
+    <Compile Include="Undo\Action\RemoveInstrumentEventAction.cs" />
+    <Compile Include="Undo\Action\RenameInstrumentEventAction.cs" />
+    <Compile Include="Undo\Action\RenameTrackAction.cs" />
+    <Compile Include="Undo\Action\SetSoundAction.cs" />
+    <Compile Include="Undo\Action\UndoRedoAction.cs" />
+    <Compile Include="Undo\UndoManager.cs" />
+    <EmbeddedResource Include="AboutForm.resx">
+      <DependentUpon>AboutForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\Editor\EditorRenderControl.resx">
+      <DependentUpon>EditorRenderControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Files\bms\SaveSettingsDialog.resx">
+      <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Files\pt\SaveSettingsDialog.resx">
+      <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="LoadingForm.resx">
+      <DependentUpon>LoadingForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\AudioListForm.resx">
+      <DependentUpon>AudioListForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Controls\Editor\EditorControl.resx">
+      <DependentUpon>EditorControl.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\DebugOutput.resx">
+      <DependentUpon>DebugOutput.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\EditorForm.resx">
+      <DependentUpon>EditorForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="MainForm.resx">
+      <DependentUpon>MainForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\EventsListForm.resx">
+      <DependentUpon>EventsListForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\FModForm.resx">
+      <DependentUpon>FModForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\NoteSelectForm.resx">
+      <DependentUpon>NoteSelectForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\PerformancesForm.resx">
+      <DependentUpon>PerformancesForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources.resx">
+      <Generator>PublicResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Panels\PropertiesForm.resx">
+      <DependentUpon>PropertiesForm.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Properties\Resources.resx">
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
+    </EmbeddedResource>
+    <Compile Include="Properties\Resources.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
+    </Compile>
+    <EmbeddedResource Include="Panels\ToolWindow.resx">
+      <DependentUpon>ToolWindow.cs</DependentUpon>
+    </EmbeddedResource>
+    <None Include="app.config" />
+    <None Include="DJMaxEditor_TemporaryKey.pfx" />
+    <None Include="layout.config">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="packages.config" />
+    <None Include="Properties\Settings.settings">
+      <Generator>SettingsSingleFileGenerator</Generator>
+      <LastGenOutput>Settings.Designer.cs</LastGenOutput>
+    </None>
+    <Compile Include="Properties\Settings.Designer.cs">
+      <AutoGen>True</AutoGen>
+      <DependentUpon>Settings.settings</DependentUpon>
+      <DesignTimeSharedInput>True</DesignTimeSharedInput>
+    </Compile>
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="arrow.ico" />
+    <Content Include="libs\fmod\fmod.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_Bottom.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\Dockindicator_PaneDiamond_Fill.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_Hotspot.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_HotspotIndex.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_Left.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_Right.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PaneDiamond_Top.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelBottom.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelBottom_Active.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelFill.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelFill_Active.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelLeft.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelLeft_Active.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelRight.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelRight_Active.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelTop.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockIndicator_PanelTop_Active.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockPane_AutoHide.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockPane_Close.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockPane_Dock.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockPane_Option.bmp" />
+    <Content Include="libs\WinFormsUI\Docking\Resources\DockPane_OptionOverflow.bmp" />
+    <None Include="Resources\note.png" />
+    <None Include="Resources\Attr90.png" />
+    <None Include="Resources\Soundfile_461.png" />
+    <None Include="Resources\Open_6529.png" />
+    <None Include="Resources\save_16xLG.png" />
+    <None Include="Resources\fmod.png" />
+    <None Include="Resources\properties_16xLG.png" />
+    <None Include="Resources\Edit_UndoHS.png" />
+    <None Include="Resources\Edit_RedoHS.png" />
+    <None Include="Resources\redo.png" />
+    <None Include="Resources\openfile.png" />
+    <None Include="Resources\undo.png" />
+    <None Include="Resources\savefile.png" />
+    <None Include="Resources\undo.ico" />
+    <None Include="Resources\savefile.ico" />
+    <None Include="Resources\redo.ico" />
+    <None Include="Resources\openfile.ico" />
+    <None Include="Resources\videoStart.png" />
+    <None Include="Resources\beat.png" />
+    <None Include="Resources\metronome.png" />
+    <None Include="Resources\volume.png" />
+    <None Include="Resources\unknowNote.png" />
+    <None Include="Resources\tempo.png" />
+    <None Include="Resources\repeattail.png" />
+    <None Include="Resources\ouputIcon.png" />
+    <None Include="Resources\ouputIcon.ico" />
+    <None Include="Resources\noterepeatline.png" />
+    <None Include="Resources\noterepeat_end.png" />
+    <None Include="Resources\noterepeat.png" />
+    <None Include="Resources\notepressstart_end.png" />
+    <None Include="Resources\notepressstart.png" />
+    <None Include="Resources\notepressnote.png" />
+    <None Include="Resources\notepressline.png" />
+    <None Include="Resources\Note_Basic.png" />
+    <None Include="Resources\longnoteline.png" />
+    <None Include="Resources\longnotehold.png" />
+    <None Include="Resources\longnote.png" />
+    <None Include="Resources\longholdgaugein.png" />
+    <None Include="Resources\longholdgauge.png" />
+    <None Include="Resources\long_note_line.png" />
+    <None Include="Resources\long_note_end.png" />
+    <None Include="Resources\line_nor_end.png" />
+    <None Include="Resources\line_in_end.png" />
+    <None Include="Resources\Icon_17.png" />
+    <None Include="Resources\Icon_17.ico" />
+    <None Include="Resources\Icon_16.png" />
+    <None Include="Resources\Icon_16.ico" />
+    <None Include="Resources\Icon_15.png" />
+    <None Include="Resources\Icon_15.ico" />
+    <None Include="Resources\DockPane_AutoHide.bmp" />
+    <None Include="Resources\DockIndicator_PanelTop_Active.bmp" />
+    <None Include="Resources\DockIndicator_PanelTop.bmp" />
+    <None Include="Resources\DockIndicator_PanelRight_Active.bmp" />
+    <None Include="Resources\DockIndicator_PanelRight.bmp" />
+    <None Include="Resources\DockIndicator_PanelLeft_Active.bmp" />
+    <None Include="Resources\DockIndicator_PanelLeft.bmp" />
+    <None Include="Resources\DockIndicator_PanelFill_Active.bmp" />
+    <None Include="Resources\DockIndicator_PanelFill.bmp" />
+    <None Include="Resources\DockIndicator_PanelBottom_Active.bmp" />
+    <None Include="Resources\DockIndicator_PanelBottom.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_Top.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_Right.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_Left.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_HotspotIndex.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_Hotspot.bmp" />
+    <None Include="Resources\Dockindicator_PaneDiamond_Fill.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond_Bottom.bmp" />
+    <None Include="Resources\DockIndicator_PaneDiamond.bmp" />
+    <None Include="Resources\DockPane_OptionOverflow.bmp" />
+    <None Include="Resources\DockPane_Option.bmp" />
+    <None Include="Resources\DockPane_Dock.bmp" />
+    <None Include="Resources\DockPane_Close.bmp" />
+    <Content Include="libs\fmod\fmodex.dll">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Include="libs\WinFormsUI\Docking\DockPanel.bmp" />
+  </ItemGroup>
+  <ItemGroup>
+    <BootstrapperPackage Include=".NETFramework,Version=v4.0,Profile=Client">
+      <Visible>False</Visible>
+      <ProductName>Microsoft .NET Framework 4 Client Profile %28x86 and x64%29</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Client.3.5">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1 Client Profile</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
+      <Visible>False</Visible>
+      <ProductName>.NET Framework 3.5 SP1</ProductName>
+      <Install>false</Install>
+    </BootstrapperPackage>
+    <BootstrapperPackage Include="Microsoft.Windows.Installer.3.1">
+      <Visible>False</Visible>
+      <ProductName>Windows Installer 3.1</ProductName>
+      <Install>true</Install>
+    </BootstrapperPackage>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="libs\UnpackMe.SDK.Standard\UnpackMe.SDK.Standard.csproj">
+      <Project>{4a0f82ae-f6ef-4063-a2ed-f3d8cee4c83a}</Project>
+      <Name>UnpackMe.SDK.Standard</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <ItemGroup />
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

@@ -1,0 +1,19 @@
+Trilogy tracks information
+
+tracks 0, 1, 2, 3 :
+Player 1
+
+tracks 4, 5, 6, 7 :
+Player 1 extra informations
+
+tracks 8, 9, 10, 11 :
+Player2
+
+tracks 12, 13, 14, 15 :
+Player 2 extra informations
+
+track 16 : 
+main audio track
+
+track 17 :
+video track

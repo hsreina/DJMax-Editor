@@ -1,0 +1,3 @@
+[submodule "DJMaxEditor/libs/UnpackMe.SDK.Standard"]
+	path = DJMaxEditor/libs/UnpackMe.SDK.Standard
+	url = https://github.com/hsreina/UnpackMe.SDK.Standard.git
