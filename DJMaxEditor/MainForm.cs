@@ -163,6 +163,7 @@ namespace DJMaxEditor
 
             _saveHandler = new SaveHandler();
             _saveHandler.Register(new PTSaveFile());
+            _saveHandler.Register(new TQSaveFile());
             _saveHandler.Register(new BMESaveFile());
 
             _loadHandler = new LoadHandler();

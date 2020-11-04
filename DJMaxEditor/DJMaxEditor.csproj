@@ -147,6 +147,7 @@
     <Compile Include="Files\bms\SaveSettingsDialog.Designer.cs">
       <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Files\bytes\TQSaveFile.cs" />
     <Compile Include="Files\File.cs" />
     <Compile Include="Files\FilesHandler.cs" />
     <Compile Include="Files\IOpenFile.cs" />

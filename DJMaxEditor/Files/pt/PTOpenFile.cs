@@ -143,6 +143,7 @@ namespace DJMaxEditor
 
                 if (insNo > 1000) 
                 {
+                    Logs.Write("sound count over 1000");
                     return false;
                 }
 
