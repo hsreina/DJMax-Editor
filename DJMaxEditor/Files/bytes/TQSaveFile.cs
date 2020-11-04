@@ -5,9 +5,9 @@ using System.Text;
 using System.Windows.Forms;
 using DJMaxEditor.DJMax;
 
-namespace DJMaxEditor.Files.pt
+namespace DJMaxEditor.Files.bytes
 {
-    internal class TQSaveFile : PTFile, ISaveFile
+    internal class TQSaveFile : ISaveFile
     {
         public string GetName()
         {

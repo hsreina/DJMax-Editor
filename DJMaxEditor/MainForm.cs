@@ -15,6 +15,7 @@ using DJMaxEditor.Panels;
 using DJMaxEditor.Files;
 using DJMaxEditor.Controls.Editor.Renderers.Zones;
 using DJMaxEditor.Files.pt;
+using DJMaxEditor.Files.bytes;
 
 namespace DJMaxEditor
 {
@@ -574,6 +575,27 @@ namespace DJMaxEditor
             if (false == File.Exists(filename)) 
             {
                 return;
+            }
+            var extension = Path.GetExtension(filename).ToLower();
+
+            var handler = _loadHandler.GetHandlerForExtension(extension);
+            if (handler == null)
+            {
+                return;
+            }
+
+            var settingsForm = handler.GetSettingsForm();
+            if (settingsForm != null)
+            {
+                settingsForm.Icon = this.Icon;
+                settingsForm.StartPosition = FormStartPosition.CenterParent;
+                settingsForm.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+                settingsForm.Text = "Loading file...";
+                var closeDialogSuccess = settingsForm.ShowDialog(this) == DialogResult.OK;
+                if (!closeDialogSuccess)
+                {
+                    return;
+                }
             }
 
             Thread loadDataThread = new Thread(delegate () { OpenFileAsync(filename); });
