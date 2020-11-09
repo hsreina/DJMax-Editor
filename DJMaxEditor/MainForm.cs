@@ -418,6 +418,11 @@ namespace DJMaxEditor
 
                     if (soundIndex > 0)
                     {
+                        if (eventData.Tick < m_player.GetCurrentTick() - 50)
+                        {
+                            // TODO: seek to the current position somehow
+                            return;
+                        }
                         m_audioPlayer.SetVolume(trackIndex, eventData.Vel);
 
                         if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan))
@@ -1158,6 +1163,21 @@ namespace DJMaxEditor
             {
                 m_playerData.CurrentTick = tick;
             }
+        }
+
+        private void currentProgress_Click(object sender, EventArgs e)
+        {
+            PlayTickDialog t = new PlayTickDialog(m_player.GetCurrentTick());
+            var closeDialogSuccess = t.ShowDialog(this) == DialogResult.OK;
+            if (!closeDialogSuccess)
+            {
+                return;
+            }
+            int target = int.Parse(t.SetTick);
+
+            m_audioPlayer.StopAllSounds();
+            m_player.Reset();
+            m_player.Play(target);
         }
     }
 }
