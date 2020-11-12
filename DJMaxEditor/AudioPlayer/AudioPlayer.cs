@@ -16,7 +16,7 @@
 
         void PauseAllSounds();
 
-        bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan);
+        bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offset = 0);
 
         object GetDebugInfo();
     }

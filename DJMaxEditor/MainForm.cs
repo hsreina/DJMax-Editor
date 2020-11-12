@@ -418,17 +418,27 @@ namespace DJMaxEditor
 
                     if (soundIndex > 0)
                     {
-                        if (eventData.Tick < m_player.GetCurrentTick() - 50)
-                        {
-                            // TODO: seek to the current position somehow
-                            return;
-                        }
                         m_audioPlayer.SetVolume(trackIndex, eventData.Vel);
 
-                        if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan))
+                        var evTick = eventData.Tick;
+                        var currentTick = m_player.GetCurrentTick();
+                        if (evTick < currentTick - 50)
                         {
-                            Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
-                        };
+                            // TODO: seek to the current position somehow
+                            //var tps = m_playerData.TickPerMinute;
+                            //int offset = (currentTick - evTick) * 1000 / tps;
+                            //if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan, (uint)offset))
+                            //{
+                            //    Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
+                            //};
+                        } else
+                        {
+                            if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan))
+                            {
+                                Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
+                            };
+                        }
+
                     }
 
                     break;
