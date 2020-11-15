@@ -157,6 +157,8 @@
       <DependentUpon>OpenSettingsDialog.cs</DependentUpon>
     </Compile>
     <Compile Include="Files\bytes\TQSaveFile.cs" />
+    <Compile Include="Files\Cyclon\CyclonXmlOpenFile.cs" />
+    <Compile Include="Files\Cyclon\XmlStructure.cs" />
     <Compile Include="Files\File.cs" />
     <Compile Include="Files\FilesHandler.cs" />
     <Compile Include="Files\IOpenFile.cs" />

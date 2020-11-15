@@ -16,6 +16,7 @@ using DJMaxEditor.Files;
 using DJMaxEditor.Controls.Editor.Renderers.Zones;
 using DJMaxEditor.Files.pt;
 using DJMaxEditor.Files.bytes;
+using DJMaxEditor.Files.Cyclon;
 
 namespace DJMaxEditor
 {
@@ -170,6 +171,7 @@ namespace DJMaxEditor
             _loadHandler = new LoadHandler();
             _loadHandler.Register(new PTOpenFile());
             _loadHandler.Register(new TQOpenFile());
+            _loadHandler.Register(new CyclonXmlOpenFile());
 
             var editor = m_editorForm.Editor;
 
@@ -748,7 +750,7 @@ namespace DJMaxEditor
 
         private void openToolStripMenuItem_Click(object sender, EventArgs e)
         {
-
+            openFileDialog1.Filter = _loadHandler.GetFilter();
             DialogResult result = openFileDialog1.ShowDialog();
             if (result == DialogResult.OK)
             {
