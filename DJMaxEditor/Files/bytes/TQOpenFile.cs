@@ -4,7 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Windows.Forms;
 
-namespace DJMaxEditor.Files
+namespace DJMaxEditor.Files.bytes
 {
     internal class TQOpenFile : IOpenFile
     {
@@ -23,9 +23,11 @@ namespace DJMaxEditor.Files
             return "Technika Q pattern(*.bytes)";
         }
 
+        private OpenSettingsDialog m_settingsDialog = new OpenSettingsDialog();
+
         public Form GetSettingsForm()
         {
-            return null;
+            return m_settingsDialog;
         }
 
         public bool Open(string filename, out PlayerData playerData)
@@ -93,7 +95,10 @@ namespace DJMaxEditor.Files
                 stream.Skip(1);
                 string oggName = stream.ReadString(0x40);
 
-                oggName = oggName.Replace(".wav", ".ogg");
+                if (m_settingsDialog.RenameInst)
+                {
+                    oggName = oggName.Replace(".wav", ".ogg");
+                }
 
                 instruments.Add(new InstrumentData()
                 {

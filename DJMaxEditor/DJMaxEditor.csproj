@@ -71,6 +71,9 @@
   <PropertyGroup>
     <StartupObject>DJMaxEditor.Program</StartupObject>
   </PropertyGroup>
+  <PropertyGroup>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+  </PropertyGroup>
   <ItemGroup>
     <Reference Include="Microsoft.Owin, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35, processorArchitecture=MSIL">
       <HintPath>..\packages\Microsoft.Owin.4.0.0\lib\net451\Microsoft.Owin.dll</HintPath>
@@ -147,6 +150,13 @@
     <Compile Include="Files\bms\SaveSettingsDialog.Designer.cs">
       <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
     </Compile>
+    <Compile Include="Files\bytes\OpenSettingsDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Files\bytes\OpenSettingsDialog.Designer.cs">
+      <DependentUpon>OpenSettingsDialog.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Files\bytes\TQSaveFile.cs" />
     <Compile Include="Files\File.cs" />
     <Compile Include="Files\FilesHandler.cs" />
     <Compile Include="Files\IOpenFile.cs" />
@@ -344,6 +354,12 @@
     <Compile Include="libs\fmod\fmodex\fmod_memoryinfo.cs" />
     <Compile Include="Logs.cs" />
     <Compile Include="PlayerEventsListProxy.cs" />
+    <Compile Include="PlayTickDialog.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="PlayTickDialog.Designer.cs">
+      <DependentUpon>PlayTickDialog.cs</DependentUpon>
+    </Compile>
     <Compile Include="ProgressBar.cs" />
     <Compile Include="PropertyLayer\BeatEventPropertiesLayer.cs" />
     <Compile Include="PropertyLayer\NoteEventPropertiesLayer.cs" />
@@ -386,6 +402,9 @@
     <EmbeddedResource Include="Files\bms\SaveSettingsDialog.resx">
       <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Files\bytes\OpenSettingsDialog.resx">
+      <DependentUpon>OpenSettingsDialog.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Files\pt\SaveSettingsDialog.resx">
       <DependentUpon>SaveSettingsDialog.cs</DependentUpon>
     </EmbeddedResource>
@@ -419,6 +438,9 @@
     <EmbeddedResource Include="Panels\PerformancesForm.resx">
       <DependentUpon>PerformancesForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="PlayTickDialog.resx">
+      <DependentUpon>PlayTickDialog.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Resources.resx">
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
@@ -441,6 +463,7 @@
       <DependentUpon>ToolWindow.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="app.config" />
+    <None Include="app.manifest" />
     <None Include="DJMaxEditor_TemporaryKey.pfx" />
     <None Include="layout.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>

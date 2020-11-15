@@ -15,6 +15,7 @@ using DJMaxEditor.Panels;
 using DJMaxEditor.Files;
 using DJMaxEditor.Controls.Editor.Renderers.Zones;
 using DJMaxEditor.Files.pt;
+using DJMaxEditor.Files.bytes;
 
 namespace DJMaxEditor
 {
@@ -163,6 +164,7 @@ namespace DJMaxEditor
 
             _saveHandler = new SaveHandler();
             _saveHandler.Register(new PTSaveFile());
+            _saveHandler.Register(new TQSaveFile());
             _saveHandler.Register(new BMESaveFile());
 
             _loadHandler = new LoadHandler();
@@ -418,10 +420,25 @@ namespace DJMaxEditor
                     {
                         m_audioPlayer.SetVolume(trackIndex, eventData.Vel);
 
-                        if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan))
+                        var evTick = eventData.Tick;
+                        var currentTick = m_player.GetCurrentTick();
+                        if (evTick < currentTick - 50)
                         {
-                            Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
-                        };
+                            // TODO: seek to the current position somehow
+                            //var tps = m_playerData.TickPerMinute;
+                            //int offset = (currentTick - evTick) * 1000 / tps;
+                            //if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan, (uint)offset))
+                            //{
+                            //    Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
+                            //};
+                        } else
+                        {
+                            if (!m_audioPlayer.PlaySound(trackIndex, soundIndex, track.Volume, pan))
+                            {
+                                Logs.Write("Failed to play sound on track : {0}, soundIndex : {1}", trackIndex, soundIndex);
+                            };
+                        }
+
                     }
 
                     break;
@@ -573,6 +590,27 @@ namespace DJMaxEditor
             if (false == File.Exists(filename)) 
             {
                 return;
+            }
+            var extension = Path.GetExtension(filename).ToLower();
+
+            var handler = _loadHandler.GetHandlerForExtension(extension);
+            if (handler == null)
+            {
+                return;
+            }
+
+            var settingsForm = handler.GetSettingsForm();
+            if (settingsForm != null)
+            {
+                settingsForm.Icon = this.Icon;
+                settingsForm.StartPosition = FormStartPosition.CenterParent;
+                settingsForm.FormBorderStyle = FormBorderStyle.FixedToolWindow;
+                settingsForm.Text = "Loading file...";
+                var closeDialogSuccess = settingsForm.ShowDialog(this) == DialogResult.OK;
+                if (!closeDialogSuccess)
+                {
+                    return;
+                }
             }
 
             Thread loadDataThread = new Thread(delegate () { OpenFileAsync(filename); });
@@ -1135,6 +1173,21 @@ namespace DJMaxEditor
             {
                 m_playerData.CurrentTick = tick;
             }
+        }
+
+        private void currentProgress_Click(object sender, EventArgs e)
+        {
+            PlayTickDialog t = new PlayTickDialog(m_player.GetCurrentTick());
+            var closeDialogSuccess = t.ShowDialog(this) == DialogResult.OK;
+            if (!closeDialogSuccess)
+            {
+                return;
+            }
+            int target = int.Parse(t.SetTick);
+
+            m_audioPlayer.StopAllSounds();
+            m_player.Reset();
+            m_player.Play(target);
         }
     }
 }

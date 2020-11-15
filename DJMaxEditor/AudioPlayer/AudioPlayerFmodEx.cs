@@ -55,7 +55,8 @@ namespace DJMaxEditor
                     fmodMode |
                     FMODEX.MODE._2D |
                     FMODEX.MODE.SOFTWARE |
-                    FMODEX.MODE.LOOP_OFF
+                    FMODEX.MODE.LOOP_OFF |
+                    FMODEX.MODE.ACCURATETIME
                     /*| (FMODEX.MODE._2D | FMODEX.MODE.HARDWARE | FMODEX.MODE.CREATESTREAM)*/,
                     ref m_sounds[index]
                 );
@@ -121,7 +122,7 @@ namespace DJMaxEditor
 
         }
 
-        public bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan)
+        public bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offset = 0)
         {
             channelIndex %= MAX_CHANNEL;
 
@@ -161,10 +162,19 @@ namespace DJMaxEditor
 
             FMODEX.Channel chan = null;
             FMODEX.RESULT result = m_system.playSound(FMODEX.CHANNELINDEX.FREE, m_sounds[soundIndex], true, ref _channels[channelIndex]);
-            chan = _channels[channelIndex];
-            chan.setVolume(volume);
-            chan.setPan(fpan);
-            chan.setPaused(false);
+            if (result == FMODEX.RESULT.OK)
+            {
+                chan = _channels[channelIndex];
+                chan.setVolume(volume);
+                chan.setPan(fpan);
+                chan.setPaused(false);
+
+                if (offset != 0)
+                {
+                    Logs.Write("Seek sound {0} to position {1} ms", soundIndex, offset);
+                    chan.setPosition(offset, FMODEX.TIMEUNIT.PCM);
+                }
+            }
 
             return result == FMODEX.RESULT.OK;
         }
@@ -220,7 +230,7 @@ namespace DJMaxEditor
 
         public const int MAX_CHANNEL = 100;
 
-        public const int MAX_SOUND = 600;
+        public const int MAX_SOUND = 2000;
 
         private int n_numdrivers;
 
@@ -275,7 +285,7 @@ namespace DJMaxEditor
 
             result = m_system.setDSPBufferSize(512, 4);
 
-            m_system.setSoftwareFormat(22000, FMODEX.SOUND_FORMAT.PCMFLOAT, 0, 0, FMODEX.DSP_RESAMPLER.LINEAR);
+            m_system.setSoftwareFormat(44100, FMODEX.SOUND_FORMAT.PCMFLOAT, 0, 0, FMODEX.DSP_RESAMPLER.LINEAR);
 
             m_system.init(32, FMODEX.INITFLAGS.NORMAL, (IntPtr)null);
             return FMODEX.RESULT.OK;
