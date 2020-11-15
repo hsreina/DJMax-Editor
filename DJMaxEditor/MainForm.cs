@@ -456,8 +456,6 @@ namespace DJMaxEditor
 
         }
 
-        private Binding m_previousBinding;
-
         private void OpenFileComplete(PlayerData playerData, string filename, bool success)
         {
             m_loadingForm.Close();
@@ -490,11 +488,13 @@ namespace DJMaxEditor
             m_editorForm.Editor.Initialize(m_playerData);
         }
 
-        private void SaveFile(string filename)
+        private void SaveFile(string filename, int filterIndex = 0)
         {
             var extension = Path.GetExtension(filename).ToLower();
 
-            var handler = _saveHandler.GetHandlerForExtension(extension);
+            var handler = filterIndex > 0 ?
+                _saveHandler.GetHandlerForFilterIndex(filterIndex) :
+                _saveHandler.GetHandlerForExtension(extension);
             if (handler == null)
             {
                 return;
@@ -587,7 +587,7 @@ namespace DJMaxEditor
             return true;
         }
 
-        private void OpenFile(string filename)
+        private void OpenFile(string filename, int filterIndex = 0)
         {
             if (false == File.Exists(filename)) 
             {
@@ -595,7 +595,10 @@ namespace DJMaxEditor
             }
             var extension = Path.GetExtension(filename).ToLower();
 
-            var handler = _loadHandler.GetHandlerForExtension(extension);
+            var handler = filterIndex > 0 ? 
+                _loadHandler.GetHandlerForFilterIndex(filterIndex) :
+                _loadHandler.GetHandlerForExtension(extension);
+
             if (handler == null)
             {
                 return;
@@ -754,7 +757,7 @@ namespace DJMaxEditor
             DialogResult result = openFileDialog1.ShowDialog();
             if (result == DialogResult.OK)
             {
-                OpenFile(openFileDialog1.FileName);
+                OpenFile(openFileDialog1.FileName, openFileDialog1.FilterIndex);
             }
         }
 
@@ -845,7 +848,7 @@ namespace DJMaxEditor
             {
                 return;
             }
-            SaveFile(saveFileDialog1.FileName);
+            SaveFile(saveFileDialog1.FileName, saveFileDialog1.FilterIndex);
         }
 
         private void fMODInformationsToolStripMenuItem_Click(object sender, EventArgs e)

@@ -11,12 +11,12 @@ namespace DJMaxEditor.Files.bytes
     {
         public string GetName()
         {
-            return "Technika Q pattern(*.bytes)";
+            return "Technika Q pattern";
         }
 
         public string GetDescription()
         {
-            return "Technika Q pattern(*.bytes)";
+            return "Technika Q pattern";
         }
 
         public string GetExtension()

@@ -37,5 +37,16 @@ namespace DJMaxEditor.Files
         {
             return _handlers.FirstOrDefault(x => $".{x.GetExtension()}" == extension);
         }
+
+        public Type GetHandlerForFilterIndex(int filterIndex) 
+        {
+            int index = filterIndex - 1;
+            if ((index < 0) || (index > _handlers.Count - 1)) 
+            {
+                return default;
+            }
+            // Todo: fix this for the case of multiple extension for the same Handler
+            return _handlers[filterIndex - 1];
+        }
     }
 }
