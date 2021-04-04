@@ -18,7 +18,7 @@ namespace DJMaxEditor.Files.Cyclon
         public long Tempo;
 
         [XmlAttribute("tpm")]
-        public ushort Tpm;
+        public long Tpm;
 
         [XmlAttribute("start_tick")]
         public long StartTick;

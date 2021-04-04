@@ -1,4 +1,4 @@
-﻿using DJMaxEditor.DJMax;
+using DJMaxEditor.DJMax;
 using System.IO;
 using System.Linq;
 using System.Windows.Forms;
@@ -38,10 +38,12 @@ namespace DJMaxEditor.Files.Cyclon
             var tracks = playerData.Tracks;
 
             var songInfo = xmlRoot.Header.SongInfo;
+            double scale = 192.0 / (float)songInfo.Tpm;
+
             playerData.TickPerMinute = 192;
             playerData.Tempo = songInfo.Tempo;
-            playerData.HeaderEndTick = songInfo.EndTick;
-            playerData.TrackDuration = songInfo.Ms / 1000;
+            playerData.HeaderEndTick = System.Convert.ToUInt32(System.Math.Round(songInfo.EndTick * scale));
+            playerData.TrackDuration = songInfo.Ms / 1000;  
             playerData.Version = 1;
 
             instruments.Add(new InstrumentData()
@@ -63,7 +65,7 @@ namespace DJMaxEditor.Files.Cyclon
                 EventData newEvent = new EventData()
                 {
                     TrackId = 0,
-                    Tick = temp.Tick,
+                    Tick = (int)System.Math.Round(temp.Tick * scale),
                     EventType = EventType.Tempo,
                     Tempo = tempo,
                 };
@@ -92,10 +94,10 @@ namespace DJMaxEditor.Files.Cyclon
                     EventData newEvent = new EventData()
                     {
                         TrackId = xmlTrack.Idx,
-                        Tick = xmlNote.Tick,
+                        Tick = (int)System.Math.Round(xmlNote.Tick * scale),
                         EventType = EventType.Note,
                         Attribute = xmlNote.Attr,
-                        Duration = xmlNote.Dur,
+                        Duration = (ushort)System.Math.Round(xmlNote.Dur * scale),
                         Instrument = inst,
                     };
 
