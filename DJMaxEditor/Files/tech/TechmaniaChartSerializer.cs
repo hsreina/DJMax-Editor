@@ -58,21 +58,41 @@ namespace DJMaxEditor.Files.Tech
         private const int PulsesPerBeat = 240;
         private const int VirtualTicksPerBeat = 288;
 
-        // Source tracks the TECHNIKA layout already reserves: lanes 0-3, end-of-scan marker
-        // tracks 4-7, the tempo slot at 8. The first occupied invisible/keysound format
-        // lane compacts onto track 16, the following ones onto tracks 20, 21, 22, ... -
-        // extra lanes stay out of the 16-track game grid.
+        // TECHNIKA / editor track layout (see doc/technika3.txt and TechnikaZoneRenderer):
+        //   0-3   playable lanes (TEMPO events also live on track 0)
+        //   4-7   end-of-scan marker tracks
+        //   8-15  reserved / unused (Trilogy P2 region)
+        //   16    BGM (main audio)
+        //   17    BGA (video)
+        //   18    speed
+        //   19    soundtrack on/off
+        //   20+   keysound / autoplay lanes
+        // The .tech format allows format lanes 0..63; occupied extras map onto this layout
+        // and remember their origin lane for save-back.
         private const int LaneCount = 4;
         private const int FirstMarkerTrack = 4;
-        private const int TempoTrack = 8;
-        private const int FirstOverflowTrack = 16;
-        private const int SubsequentOverflowTrack = 20;
-        private const int MaxModelTrackIndex = 50;
-        // Slots: track 16 for the first occupied extra lane, tracks 20..50 for the rest.
-        private const int OverflowSlotCount = 1 + (MaxModelTrackIndex - SubsequentOverflowTrack + 1);
-        private const int MaxExtraFormatLane = LaneCount + OverflowSlotCount - 1;
+        private const int TempoTrack = 0;
+        private const int BgmTrack = 16;
+        private const int BgaTrack = 17;
+        private const int SpeedTrack = 18;
+        private const int SoundtrackTrack = 19;
+        private const int FirstKeysoundTrack = 20;
+        // First special track the writer treats as exportable accompaniment (BGM+).
+        private const int FirstSpecialTrack = BgmTrack;
+        // Enough keysound columns for a full format-lane set after the specials.
+        private const int MaxModelTrackIndex = 63;
+        private const int KeysoundSlotCount = MaxModelTrackIndex - FirstKeysoundTrack + 1;
+        // TECHMANIA's documented lane ceiling (see track.tech specification).
+        private const int MaxFormatLane = 63;
         // A save cannot name a lane the import could not have read.
-        private const int MaxWritableFormatLane = MaxExtraFormatLane;
+        private const int MaxWritableFormatLane = MaxFormatLane;
+
+        /// <summary>
+        /// Marks a Track-0 TEMPO event synthesized from <c>initBpm</c> for playback only.
+        /// Authored <c>bpmEvents</c> keep Attribute 0 so save can tell them apart and never
+        /// merge the two.
+        /// </summary>
+        internal const byte InitBpmTempoAttribute = 1;
 
         /// <summary>Beats per scan when a pattern declares none (normal TECHNIKA charts).</summary>
         private const int DefaultBeatsPerScan = 4;
@@ -297,12 +317,8 @@ namespace DJMaxEditor.Files.Tech
             };
 
             // Added in index order: TracksList.GetTrackAtIndex is list-position based, so the
-            // list position must equal Idx. Lanes 0-3 first, marker tracks 4-7, the tempo
-            // slot at 8, then occupied invisible/keysound lanes compacted onto tracks 9+,
-            // exactly the "one column per track that has notes" behaviour the other importers
-            // use. The .tech format allows notes on lanes far past playableLanes - they are
-            // the autoplay/preview keysound lanes - and the format's own ceiling is 63; we
-            // keep as many as fit through model track 50.
+            // list position must equal Idx. Playable lanes, EOS markers, tempo, then the
+            // reserved TECHNIKA specials (BGM/BGA/Speed/Soundtrack) and keysound columns.
             var laneTracks = new TrackData[LaneCount];
             var markerTracks = new TrackData[LaneCount];
             for (int lane = 0; lane < LaneCount; lane++)
@@ -315,8 +331,12 @@ namespace DJMaxEditor.Files.Tech
                     AddTrack(player, (uint)(FirstMarkerTrack + lane), "EOS " + (lane + 1));
             }
 
-            // Always hold slot 8 so the overflow tracks keep list position equal to Idx.
-            AddTrack(player, TempoTrack, "Tempo");
+            // Materialize the TECHNIKA specials (and the unused 8-15 gap) so later track
+            // list positions stay equal to Idx. TEMPO shares playable track 0.
+            EnsureTrack(player, BgmTrack, "BGM");
+            EnsureTrack(player, BgaTrack, "BGA");
+            EnsureTrack(player, SpeedTrack, "Speed");
+            EnsureTrack(player, SoundtrackTrack, "Soundtrack");
 
             // Format lane -> events. Lanes 0-3 feed the fixed lane tracks; any occupied lane
             // at 4 or beyond is compacted onto an overflow track after import.
@@ -448,76 +468,96 @@ namespace DJMaxEditor.Files.Tech
                 markerTracks[lane].AddEvents(markerEvents[lane]);
             }
 
-            // Compact every occupied format lane at 4+ onto its overflow slot - the
-            // first onto track 16, the rest onto tracks 20, 21, 22, ... - remembering
-            // its format lane for save-back. Empty lanes get no track and therefore no
-            // column, exactly like the RESPECT/BMS importers.
-            int overflowSlot = 0;
+            // Map occupied format lanes 4+ onto the TECHNIKA layout:
+            //   - a BGM-like lane (keysounds named "0-…", as in Feel) claims track 16
+            //   - every other autoplay/keysound lane packs onto tracks 20+
+            // Tracks 17-19 stay reserved for BGA / Speed / Soundtrack scaffolding.
+            // Format lane numbers are NOT identity-mapped onto 16-19: many charts use
+            // those lane indices as ordinary keysound columns.
+            int keysoundSlot = 0;
+            bool bgmClaimed = false;
             foreach (KeyValuePair<int, List<EventData>> extra in extraLaneEvents)
             {
                 if (extra.Value.Count == 0)
                 {
                     continue;
                 }
-                int overflowTrack = OverflowTrackForSlot(overflowSlot);
-                if (overflowTrack > MaxModelTrackIndex)
-                {
-                    DiagnosticLog.Write("tech.import",
-                        "Ignored " + extra.Value.Count + " note(s) on lane " + extra.Key +
-                        ": only tracks through " + MaxModelTrackIndex + " are supported.");
-                    skipped += extra.Value.Count;
-                    overflowSlot++;
-                    continue;
-                }
-                TrackData track = AddOverflowTrack(player, overflowSlot,
-                    "lane " + (extra.Key + 1));
-                track.AddEvents(extra.Value);
-                metadata.FormatLaneByTrack[overflowTrack] = extra.Key;
-                overflowSlot++;
-            }
 
-            // Soundtrack-only charts: every tap is silent and the full song lives in
-            // patternMetadata.backingTrack. The editor transport only plays keysounds on
-            // notes, so synthesize one tick-0 trigger on its own overflow track with the
-            // backing file as its instrument. The track is editor-only scaffolding: the
-            // writer skips it and keeps the filename in the pattern metadata. (Charts in the
-            // other style trigger the song themselves from a note on a hidden lane, which
-            // the code above already imports.)
-            if (!string.IsNullOrEmpty(metadata.BackingTrack))
-            {
-                int backingTrackIndex = OverflowTrackForSlot(overflowSlot);
-                if (backingTrackIndex > MaxModelTrackIndex)
+                int formatLane = extra.Key;
+                int modelTrack;
+                string trackName;
+                if (!bgmClaimed && IsBgmKeysoundLane(extra.Value))
                 {
-                    DiagnosticLog.Write("tech.import",
-                        "No free track for the backing track \"" + metadata.BackingTrack +
-                        "\"; it is kept in metadata but cannot be previewed.");
+                    modelTrack = BgmTrack;
+                    trackName = "BGM";
+                    bgmClaimed = true;
                 }
                 else
                 {
-                    InstrumentData backing;
-                    if (!instruments.TryGetValue(metadata.BackingTrack, out backing))
+                    if (keysoundSlot >= KeysoundSlotCount)
                     {
-                        backing = AddInstrument(player, instruments,
-                            Math.Min(ushort.MaxValue, instruments.Count),
-                            metadata.BackingTrack);
+                        DiagnosticLog.Write("tech.import",
+                            "Ignored " + extra.Value.Count + " note(s) on lane " + formatLane +
+                            ": only " + KeysoundSlotCount + " keysound tracks (through " +
+                            MaxModelTrackIndex + ") are available.");
+                        skipped += extra.Value.Count;
+                        continue;
                     }
-                    TrackData backingTrackData =
-                        AddOverflowTrack(player, overflowSlot, "backing");
-                    backingTrackData.AddEvent(new EventData
-                    {
-                        EventType = EventType.Note,
-                        Attribute = 0,
-                        VirtualTick = 0,
-                        VirtualDuration = 0,
-                        Instrument = backing
-                    });
-                    metadata.BackingTrackModelTrack = backingTrackIndex;
-                    overflowSlot++;
-                    notes++;
+                    modelTrack = FirstKeysoundTrack + keysoundSlot;
+                    trackName = "lane " + (formatLane + 1);
+                    keysoundSlot++;
                 }
+
+                TrackData track = EnsureTrack(player, modelTrack, trackName);
+                track.AddEvents(extra.Value);
+                metadata.FormatLaneByTrack[modelTrack] = formatLane;
             }
 
-            // Tempo events on track 8, the first overflow track, exactly as the BMS family does.
+            // Soundtrack-only charts: every tap is silent and the full song lives in
+            // patternMetadata.backingTrack. Put a tick-0 trigger on the BGM track when it
+            // is still free so the editor transport can preview the song. The writer skips
+            // this scaffolding and keeps the filename in pattern metadata.
+            if (!string.IsNullOrEmpty(metadata.BackingTrack) && !bgmClaimed)
+            {
+                InstrumentData backing;
+                if (!instruments.TryGetValue(metadata.BackingTrack, out backing))
+                {
+                    backing = AddInstrument(player, instruments,
+                        Math.Min(ushort.MaxValue, instruments.Count),
+                        metadata.BackingTrack);
+                }
+                TrackData backingTrackData = EnsureTrack(player, BgmTrack, "BGM");
+                backingTrackData.AddEvent(new EventData
+                {
+                    EventType = EventType.Note,
+                    Attribute = 0,
+                    VirtualTick = 0,
+                    VirtualDuration = 0,
+                    Instrument = backing
+                });
+                metadata.BackingTrackModelTrack = BgmTrack;
+                notes++;
+            }
+
+            // When the pattern names a BGA file, drop a VideoStart marker on track 17 so
+            // the editor's BGA column shows the cue. Timing follows bgaOffset (seconds →
+            // virtual ticks at the initial BPM); the file itself stays in metadata.
+            if (!string.IsNullOrEmpty(metadata.Bga))
+            {
+                int bgaTick = SecondsToVirtualTick(metadata.BgaOffset, initBpm);
+                EnsureTrack(player, BgaTrack, "BGA").AddEvent(new EventData
+                {
+                    EventType = EventType.Note,
+                    Attribute = (byte)EventAttribute.VideoStart,
+                    VirtualTick = Math.Max(0, bgaTick),
+                    VirtualDuration = 0
+                });
+            }
+
+            // Authored bpmEvents land on track 0 at their original pulse positions.
+            // They are never merged into initBpm: initBpm stays in PlayerData.Tempo /
+            // pattern metadata, and only a playback-only marker is synthesized when no
+            // authored event already sits at tick 0.
             var tempoEvents = new List<EventData>();
             JsonElement bpmEvents;
             if (pattern.TryGetProperty("bpmEvents", out bpmEvents) &&
@@ -538,29 +578,29 @@ namespace DJMaxEditor.Files.Tech
                     tempoEvents.Add(new EventData
                     {
                         EventType = EventType.Tempo,
+                        Attribute = 0,
                         VirtualTick = ToVirtual(pulse),
                         Tempo = (float)bpm
                     });
                 }
             }
+            // TEMPO shares playable track 0 with lane-1 notes (EventType keeps them apart).
+            TrackData tempoTrack = player.Tracks.GetTrackAtIndex(TempoTrack);
             if (tempoEvents.Count > 0)
             {
-                // Slot 8 was created empty up front so the overflow tracks keep their
-                // position-equals-Idx invariant; just fill it when tempo events exist.
-                player.Tracks.GetTrackAtIndex(TempoTrack).AddEvents(tempoEvents);
+                tempoTrack.AddEvents(tempoEvents);
             }
 
-            // The player only applies a tempo when it crosses a TEMPO event, so the
-            // pattern's initBpm must exist as one at tick 0 or playback runs at the
-            // default period. An authored bpmEvent at pulse 0 already covers this, and
-            // the writer never emits pulse-0 bpmEvents, so this synthesized marker on
-            // track 0 never round-trips back into the file.
-            bool hasInitialTempo = tempoEvents.Exists(e => e.VirtualTick == 0);
-            if (!hasInitialTempo)
+            // Playback only applies tempo when it crosses a TEMPO event. If no authored
+            // bpmEvent sits at tick 0, synthesize one from initBpm and tag it so save
+            // writes it back to patternMetadata.initBpm instead of bpmEvents.
+            bool hasAuthoredTick0 = tempoEvents.Exists(e => e.VirtualTick == 0);
+            if (!hasAuthoredTick0)
             {
-                player.Tracks.GetTrackAtIndex(0).AddEvent(new EventData
+                tempoTrack.AddEvent(new EventData
                 {
                     EventType = EventType.Tempo,
+                    Attribute = InitBpmTempoAttribute,
                     VirtualTick = 0,
                     Tempo = (float)initBpm
                 });
@@ -586,30 +626,81 @@ namespace DJMaxEditor.Files.Tech
             return track;
         }
 
-        // Overflow slot -> model track: the first occupied extra format lane goes to
-        // track 16, following ones compact onto tracks 20, 21, 22, ... .
-        private static int OverflowTrackForSlot(int slotIndex)
+        /// <summary>
+        /// Ensures model track <paramref name="trackIndex"/> exists (materializing any
+        /// lower gaps so list position equals Idx) and returns it. Renames empty
+        /// placeholders when a real name is supplied.
+        /// </summary>
+        private static TrackData EnsureTrack(PlayerData player, int trackIndex, string name)
         {
-            return slotIndex <= 0 ? FirstOverflowTrack : SubsequentOverflowTrack + slotIndex - 1;
-        }
-
-        // Creates the model track for an overflow slot, materializing the gap rows
-        // (9-15, 17-19, ...) as empty placeholder tracks first: GetTrackAtIndex is
-        // list-position based, so position must equal Idx for the writer and the
-        // editing actions to find these tracks.
-        private static TrackData AddOverflowTrack(PlayerData player, int slotIndex, string name)
-        {
-            int trackIndex = OverflowTrackForSlot(slotIndex);
             while (player.Tracks.Count < trackIndex)
             {
-                AddTrack(player, player.Tracks.Count, string.Empty);
+                AddTrack(player, (uint)player.Tracks.Count, string.Empty);
             }
-            return AddTrack(player, (uint)trackIndex, name);
+
+            TrackData existing = player.Tracks.GetTrackAtIndex((uint)trackIndex);
+            if (existing != null)
+            {
+                if (!string.IsNullOrEmpty(name) &&
+                    (string.IsNullOrEmpty(existing.TrackName) ||
+                     existing.TrackName.StartsWith("lane ", StringComparison.Ordinal)))
+                {
+                    existing.TrackName = name;
+                }
+                return existing;
+            }
+
+            return AddTrack(player, (uint)trackIndex, name ?? string.Empty);
+        }
+
+        /// <summary>
+        /// DJMAX-converted .tech charts commonly park the song stem on an autoplay lane
+        /// whose keysound files are named <c>0-…</c> (e.g. Feel's <c>0-Feel-01.ogg</c>).
+        /// Those lanes claim the dedicated BGM model track.
+        /// </summary>
+        private static bool IsBgmKeysoundLane(IList<EventData> events)
+        {
+            if (events == null || events.Count == 0)
+            {
+                return false;
+            }
+
+            foreach (EventData evt in events)
+            {
+                if (evt == null || evt.EventType != EventType.Note)
+                {
+                    continue;
+                }
+                string name = evt.Instrument != null ? evt.Instrument.Name : null;
+                if (string.IsNullOrEmpty(name) ||
+                    string.Equals(name, "none", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (name.StartsWith("0-", StringComparison.OrdinalIgnoreCase))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        /// <summary>Converts a seconds offset to virtual ticks at a constant BPM.</summary>
+        private static int SecondsToVirtualTick(double seconds, double bpm)
+        {
+            if (seconds <= 0 || bpm <= 0)
+            {
+                return 0;
+            }
+            // virtualTicksPerBeat = 288; beats per second = bpm/60.
+            double ticks = seconds * (bpm / 60.0) * VirtualTicksPerBeat;
+            return (int)Math.Max(0, Math.Min(int.MaxValue,
+                Math.Round(ticks, MidpointRounding.AwayFromZero)));
         }
 
         /// <summary>
         /// Buckets one imported note by its .tech format lane. Lanes 0-3 are the fixed
-        /// playable lanes; lanes 4..<see cref="MaxExtraFormatLane"/> are the format's
+        /// playable lanes; lanes 4..<see cref="MaxFormatLane"/> are the format's
         /// invisible/autoplay keysound lanes and are collected in lane order for the
         /// overflow tracks. A negative or out-of-range lane is the caller's malformed note.
         /// </summary>
@@ -628,7 +719,7 @@ namespace DJMaxEditor.Files.Tech
                 laneEvents[formatLane].Add(evt);
                 return true;
             }
-            if (formatLane > MaxExtraFormatLane)
+            if (formatLane > MaxFormatLane)
             {
                 return false;
             }
@@ -654,7 +745,7 @@ namespace DJMaxEditor.Files.Tech
 
         /// <summary>
         /// Builds the model event for one unpacked note. Returns false only when the note type
-        /// is unknown or its format lane is out of the supported 0..<see cref="MaxExtraFormatLane"/>.
+        /// is unknown or its format lane is out of the supported 0..<see cref="MaxFormatLane"/>.
         /// </summary>
         private static bool TryBuildNote(
             PackedNote note,
@@ -680,10 +771,10 @@ namespace DJMaxEditor.Files.Tech
                 default:
                     return false;
             }
-            // Lanes 0-3 are playable; 4..MaxExtraFormatLane are the format's invisible/
+            // Lanes 0-3 are playable; 4..MaxFormatLane are the format's invisible/
             // autoplay keysound lanes and compact onto overflow tracks after this. Only a
             // genuinely out-of-range format lane (the format ceiling is 63) is malformed.
-            if (note.Lane < 0 || note.Lane > MaxExtraFormatLane)
+            if (note.Lane < 0 || note.Lane > MaxFormatLane)
             {
                 return false;
             }

@@ -11,8 +11,9 @@ namespace DJMaxEditor.Files.Tech
     /// game, and its native note vocabulary is the one the TECHNIKA preview already
     /// speaks, so the import lands on the same four-lane layout with end-of-scan marker
     /// tracks and the same attribute grammar a real .pt uses. Notes authored on format
-    /// lanes past the playable set (the format's invisible/autoplay keysound lanes)
-    /// compact onto model tracks 9..50, one per occupied lane.
+    /// lanes past the playable set (the format's invisible/autoplay keysound lanes,
+    /// up to the format ceiling of 63) map onto the TECHNIKA specials (16 BGM /
+    /// 17 BGA / 18 Speed / 19 Soundtrack) and keysound tracks from 20 upward.
     ///
     /// A container packs one pattern per difficulty; <see cref="SelectedPatternIndex"/>
     /// selects which slot opens (set from the chooser dialog before parsing) while every

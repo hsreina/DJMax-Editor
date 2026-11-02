@@ -65,12 +65,13 @@ namespace DJMaxEditor.Files.Tech
             TechMetadata retained = player.TechMetadata;
             int dropped = 0;
             var ordered = new List<KeyValuePair<int, EventData>>();
-            // Lanes 0-3 are fixed; marker tracks 4-7 and the tempo slot 8 are not notes;
-            // overflow tracks 9..50 hold the format's invisible/keysound lanes and map back
-            // to their original format lane through the retained metadata.
+            // Lanes 0-3 are fixed (TEMPO also sits on track 0); marker/reserved tracks
+            // 4-15 are not packed notes.
+            // Specials 16-19 and keysound tracks 20+ map back to their original format lane
+            // through the retained metadata (BGA VideoStart markers stay editor-only).
             for (int trackIndex = 0; trackIndex <= MaxModelTrackIndex; trackIndex++)
             {
-                if (trackIndex >= FirstMarkerTrack && trackIndex < FirstOverflowTrack)
+                if (trackIndex >= FirstMarkerTrack && trackIndex < FirstSpecialTrack)
                 {
                     continue;
                 }
@@ -81,10 +82,16 @@ namespace DJMaxEditor.Files.Tech
                 {
                     continue;
                 }
-                // Overflow tracks only exist for an imported .tech, whose metadata carries
-                // their original format lane. A chart converted from another format keeps
-                // the historical behaviour: its four fixed lanes are all that is written.
-                if (trackIndex >= FirstOverflowTrack && retained == null)
+                // BGA / Speed / Soundtrack scaffolding is not a .tech packed note.
+                if (trackIndex == BgaTrack || trackIndex == SpeedTrack ||
+                    trackIndex == SoundtrackTrack)
+                {
+                    continue;
+                }
+                // Special/keysound tracks only exist for an imported .tech, whose metadata
+                // carries their original format lane. A chart converted from another format
+                // keeps the historical behaviour: its four fixed lanes are all that is written.
+                if (trackIndex >= FirstSpecialTrack && retained == null)
                 {
                     continue;
                 }
@@ -434,16 +441,16 @@ namespace DJMaxEditor.Files.Tech
                     {
                         continue;
                     }
-                    int pulse = ToPulse(evt.VirtualTick);
-                    if (pulse <= 0)
+                    // Playback-only marker synthesized from initBpm - never fold it into
+                    // bpmEvents. Authored entries keep Attribute 0 and stay at their pulse,
+                    // including pulse 0 when the chart wrote one.
+                    if (evt.Attribute == InitBpmTempoAttribute)
                     {
-                        // The initial tempo lives in patternMetadata.initBpm; a change at 0
-                        // written in both places is redundant.
                         continue;
                     }
                     events.Add(new BpmEventDto
                     {
-                        pulse = pulse,
+                        pulse = ToPulse(evt.VirtualTick),
                         bpm = Math.Round(evt.Tempo, 3)
                     });
                 }

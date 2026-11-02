@@ -152,6 +152,7 @@ namespace DJMaxEditor
                     {
                         m_audioList.List.ClearSelection();
                     }
+                    RevealInspectorTab();
                 }
                 else if (_documentContext != null &&
                     selectedItems.All(item => item.EventType == EventType.Volume))
@@ -191,23 +192,65 @@ namespace DJMaxEditor
             // Check the selected note instrument
             SelectInstrumentRow(firstEvent.Instrument);
 
+            if (firstEvent.EventType == EventType.Note)
+            {
+                RevealInspectorTab();
+            }
+        }
+
+        /// <summary>
+        /// Bring the Inspector dock tab to the front without stealing keyboard focus
+        /// from the chart editor (so shortcuts keep working after a note click).
+        /// </summary>
+        private void RevealInspectorTab()
+        {
+            if (m_propertiesForm == null || m_propertiesForm.IsDisposed)
+            {
+                return;
+            }
+
+            if (m_propertiesForm.DockPanel == null)
+            {
+                m_propertiesForm.Show(dockPanel);
+                return;
+            }
+
+            if (m_propertiesForm.IsHidden)
+            {
+                m_propertiesForm.Show(dockPanel);
+            }
+
+            if (m_propertiesForm.Pane != null)
+            {
+                m_propertiesForm.Pane.ActiveContent = m_propertiesForm;
+            }
         }
 
         private void SelectInstrumentRow(InstrumentData instrumentData)
         {
-            if (instrumentData != null)
+            // Highlighting the Sounds row for a note selection must not be treated as the
+            // user picking a new instrument (SelectionChanged would rewrite the note).
+            _suppressAudioListInstrumentApply = true;
+            try
             {
-                var row = m_audioList.List.Rows.Cast<DataGridViewRow>().SingleOrDefault(r => r.DataBoundItem == instrumentData);
-                // If we got something, select and move to this track
-                if (row != null)
+                if (instrumentData != null)
                 {
-                    row.Selected = true;
-                    m_audioList.List.FirstDisplayedScrollingRowIndex = row.Index;
+                    var row = m_audioList.List.Rows.Cast<DataGridViewRow>().SingleOrDefault(r => r.DataBoundItem == instrumentData);
+                    // If we got something, select and move to this track
+                    if (row != null)
+                    {
+                        row.Selected = true;
+                        m_audioList.List.FirstDisplayedScrollingRowIndex = row.Index;
+                    }
+                }
+                else
+                {
+                    m_audioList.List.ClearSelection();
                 }
             }
-            else
+            finally
             {
-                m_audioList.List.ClearSelection();
+                _suppressAudioListInstrumentApply = false;
             }
         }
 
@@ -978,6 +1021,10 @@ namespace DJMaxEditor
 
         private EventData m_selectedEvent = null;
 
+        // When true, Sounds-list SelectionChanged only stops preview audio and must not
+        // rewrite TemplateEvent / selected-note instruments (DataSource rebind, UI sync).
+        private bool _suppressAudioListInstrumentApply;
+
         private bool m_isFullScreen = false;
 
         private FormWindowState _oldState = FormWindowState.Maximized;
@@ -1018,6 +1065,13 @@ namespace DJMaxEditor
         private void AudioList_selectionChanged(object sender, EventArgs e)
         {
             this.m_audioPlayer.StopSound(ReservedChannel);
+
+            // DataSource rebinds (tab switch) and programmatic row highlights also fire
+            // SelectionChanged; those must not rewrite note instruments.
+            if (_suppressAudioListInstrumentApply)
+            {
+                return;
+            }
 
             if (!CanMutateThroughActiveSurface())
             {
@@ -1276,7 +1330,15 @@ namespace DJMaxEditor
                 m_player.LoadPlayerData(m_emptyPlayerData);
                 m_audioPlayer.SetSoundContext(string.Empty);
                 this.Text = APP_NAME;
-                m_audioList.List.DataSource = null;
+                _suppressAudioListInstrumentApply = true;
+                try
+                {
+                    m_audioList.List.DataSource = null;
+                }
+                finally
+                {
+                    _suppressAudioListInstrumentApply = false;
+                }
                 m_propertiesForm.PropertyObject = null;
                 UpdateStudioRails();
                 return;
@@ -1291,7 +1353,18 @@ namespace DJMaxEditor
                 LoadDocumentSounds(model, document.Context.SourcePath);
                 m_audioPlayer.MarkSoundContextLoaded(soundKey);
             }
-            m_audioList.List.DataSource = model.Instruments;
+            // Rebinding the shared Sounds grid fires SelectionChanged and would otherwise
+            // apply the auto-selected row (usually InsNum 0 / "none") onto any notes that
+            // were still selected in the document being activated.
+            _suppressAudioListInstrumentApply = true;
+            try
+            {
+                m_audioList.List.DataSource = model.Instruments;
+            }
+            finally
+            {
+                _suppressAudioListInstrumentApply = false;
+            }
             m_propertiesForm.Bind(document.Context);
             m_preview.Bind(document.Context);
             // The playfield is where a TECHNIKA chart is read - like the reference project,
@@ -1302,6 +1375,10 @@ namespace DJMaxEditor
                 ShowGameplayPreview();
             }
             SyncToolButtons(document.Context.Interaction.Tool);
+
+            // Restore inspector + Sounds highlight from this document's persisted selection
+            // before re-applying the Notes template (which reads the current Sounds row).
+            Editor_OnSelectItem(this, document.Context.Selection.Items.ToArray());
 
             // Re-apply the Notes panel template to the newly active editor so Ctrl+click
             // note creation works right after a tab switch and uses the template currently
