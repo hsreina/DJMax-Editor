@@ -616,6 +616,11 @@ namespace DJMaxEditor.Files.Tech
                 DiagnosticLog.Write("tech.import",
                     "Skipped " + skipped + " unrecognised or malformed note(s) while importing.");
             }
+
+            // Stamp the event-derived end into the header so playback/canvas do not depend
+            // solely on live Tracks.MaxTick after later edits. Media-tail extension (BGM
+            // ogg length) is applied by TechOpenFile once the chart folder is known.
+            player.HeaderEndTick = (uint)Math.Max(0, player.Tracks.MaxTick);
             return player;
         }
 

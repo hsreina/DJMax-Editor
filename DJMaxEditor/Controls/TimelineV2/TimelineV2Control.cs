@@ -7,6 +7,7 @@ using DJMaxEditor.Controls.Editor.Renderers.Events;
 using DJMaxEditor.Controls.Editor.Renderers.Zones;
 using DJMaxEditor.Controls.TimelineV2.Projection;
 using DJMaxEditor.Controls.TimelineV2.Renderers;
+using DJMaxEditor.DJMax;
 using DJMaxEditor.Editor;
 
 namespace DJMaxEditor.Controls.TimelineV2
@@ -392,6 +393,25 @@ namespace DJMaxEditor.Controls.TimelineV2
                 _lastPointer = e.Location;
                 Capture = true;
                 Cursor = Cursors.SizeAll;
+                return;
+            }
+
+            // Left click on the lane area parks the playhead for play-from-spot.
+            if (e.Button == MouseButtons.Left &&
+                _viewport != null &&
+                _coordinates != null &&
+                e.X >= _coordinates.HeaderWidth)
+            {
+                double tick = _viewport.OriginTick +
+                    ((e.X - _coordinates.HeaderWidth) /
+                        Math.Max(0.001, _viewport.PixelsPerTick));
+                int virtualTick = Math.Max(0, (int)Math.Round(tick));
+                PlayheadVirtualTick = virtualTick;
+                if (Document != null && Document.Model != null)
+                {
+                    Document.Model.CurrentTick = virtualTick / EventData.VirtualTickSize;
+                }
+                Invalidate();
             }
         }
 

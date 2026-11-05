@@ -61,6 +61,7 @@ namespace DJMaxEditor.Preview
         private int _chromeWidth;
         private int _chromeHeight;
         private int _chromeLaneCount = -1;
+        private bool _chromeShowBga;
 
         private double[] _headAngles = new double[0];
         private int[] _runOf = new int[0];
@@ -181,6 +182,19 @@ namespace DJMaxEditor.Preview
             GameplayPreviewFrame frame,
             double noteZoom)
         {
+            Paint(graphics, viewport, projection, frame, noteZoom, null, false);
+        }
+
+        /// <param name="bgaFrame">Decoded BGA frame, drawn under notes when <paramref name="showBga"/> is set.</param>
+        public void Paint(
+            Graphics graphics,
+            RectangleF viewport,
+            GameplayPreviewProjection projection,
+            GameplayPreviewFrame frame,
+            double noteZoom,
+            Image bgaFrame,
+            bool showBga)
+        {
             _projection = projection;
             _frame = frame;
             _fit = TechnikaPlayfieldMetrics.Fit(viewport.Width, viewport.Height);
@@ -190,35 +204,58 @@ namespace DJMaxEditor.Preview
                 return;
             }
 
-            EnsureChrome(viewport);
-            graphics.DrawImage(_chrome, viewport);
+            bool paintBga = showBga && bgaFrame != null;
+            EnsureChrome(viewport, paintBga);
 
-            if (projection == null || frame == null || !HasPlayfield)
+            // _fit is relative to the viewport's top-left. Chrome is painted in local
+            // bitmap space; notes/scanlines share that space after TranslateTransform so
+            // lane rules and note centres land on the same pixels.
+            GraphicsState world = graphics.Save();
+            try
             {
-                return;
+                graphics.TranslateTransform(viewport.X, viewport.Y);
+
+                // BGA under the chrome: playfield halves in the chrome bitmap stay
+                // transparent when a video is showing, so rails / rules / header sit on top.
+                if (paintBga)
+                {
+                    DrawBgaBackdrop(graphics, bgaFrame);
+                }
+                graphics.DrawImage(
+                    _chrome,
+                    new RectangleF(0, 0, viewport.Width, viewport.Height));
+
+                if (projection == null || frame == null || !HasPlayfield)
+                {
+                    return;
+                }
+
+                DrawScanlines(graphics);
+
+                IReadOnlyList<ProjectedGameplayNote> notes = frame.Notes;
+
+                // Links first, and not only so the lines pass under the heads: the walk that
+                // finds the runs is also what tells a chain head which way its arrow points.
+                DrawGroupLinks(graphics, notes);
+                for (int i = 0; i < notes.Count; i++)
+                {
+                    DrawNote(graphics, notes[i], _headAngles[i], noteZoom);
+                }
+
+                DrawHitEffects(graphics, notes);
+                DrawCountdown(graphics);
             }
-
-            DrawScanlines(graphics);
-
-            IReadOnlyList<ProjectedGameplayNote> notes = frame.Notes;
-
-            // Links first, and not only so the lines pass under the heads: the walk that
-            // finds the runs is also what tells a chain head which way its arrow points.
-            DrawGroupLinks(graphics, notes);
-            for (int i = 0; i < notes.Count; i++)
+            finally
             {
-                DrawNote(graphics, notes[i], _headAngles[i], noteZoom);
+                graphics.Restore(world);
             }
-
-            DrawHitEffects(graphics, notes);
-            DrawCountdown(graphics);
         }
 
         // -----------------------------------------------------------------------------------
         // Chrome
         // -----------------------------------------------------------------------------------
 
-        private void EnsureChrome(RectangleF viewport)
+        private void EnsureChrome(RectangleF viewport, bool showBga)
         {
             int laneCount = _projection == null ? 0 : _projection.LaneCount;
             int width = Math.Max(1, (int)Math.Ceiling(viewport.Width));
@@ -226,7 +263,8 @@ namespace DJMaxEditor.Preview
 
             if (_chrome != null &&
                 _chromeWidth == width && _chromeHeight == height &&
-                _chromeLaneCount == laneCount)
+                _chromeLaneCount == laneCount &&
+                _chromeShowBga == showBga)
             {
                 return;
             }
@@ -236,13 +274,17 @@ namespace DJMaxEditor.Preview
             _chromeWidth = width;
             _chromeHeight = height;
             _chromeLaneCount = laneCount;
+            _chromeShowBga = showBga;
 
             using (Graphics g = Graphics.FromImage(_chrome))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
+                // Local bitmap space: (0,0) is the viewport's top-left after TranslateTransform.
+                g.Clear(Color.Transparent);
+                var local = new RectangleF(0, 0, width, height);
                 using (var backdrop = new SolidBrush(_theme.Backdrop))
                 {
-                    g.FillRectangle(backdrop, viewport);
+                    g.FillRectangle(backdrop, local);
                 }
 
                 if (!HasPlayfield)
@@ -250,25 +292,111 @@ namespace DJMaxEditor.Preview
                     return;
                 }
 
-                DrawHalfChrome(g, true, laneCount);
-                DrawHalfChrome(g, false, laneCount);
+                if (showBga)
+                {
+                    // Punch a transparent hole over the note field so the BGA layer
+                    // underneath shows through; rails still draw on top.
+                    RectangleF hole = NoteFieldBounds();
+                    if (hole.Width >= 1f && hole.Height >= 1f)
+                    {
+                        var prev = g.CompositingMode;
+                        g.CompositingMode = CompositingMode.SourceCopy;
+                        using (var clear = new SolidBrush(Color.Transparent))
+                        {
+                            g.FillRectangle(clear, hole);
+                        }
+                        g.CompositingMode = prev;
+                    }
+                }
+
+                DrawHalfChrome(g, true, laneCount, showBga);
+                DrawHalfChrome(g, false, laneCount, showBga);
+                // Arcade dual-scan cabinet: thin centre divider between the two halves.
                 DrawDividerChrome(g);
-                DrawHeaderChrome(g);
             }
         }
 
-        private void DrawHalfChrome(Graphics g, bool isTopHalf, int laneCount)
+        private RectangleF NoteFieldBounds()
+        {
+            float left = (float)_fit.X(TechnikaPlayfieldMetrics.SidebarWidth);
+            float top = (float)_fit.Y(TechnikaPlayfieldMetrics.PlayfieldTop);
+            float width = (float)_fit.Length(
+                TechnikaPlayfieldMetrics.NativeWidth -
+                (2.0 * TechnikaPlayfieldMetrics.SidebarWidth));
+            float height = (float)_fit.Length(
+                TechnikaPlayfieldMetrics.PlayfieldBottom -
+                TechnikaPlayfieldMetrics.PlayfieldTop);
+            if (width < 1f || height < 1f)
+            {
+                return RectangleF.Empty;
+            }
+            return new RectangleF(left, top, width, height);
+        }
+
+        private void DrawBgaBackdrop(Graphics g, Image frame)
+        {
+            if (frame == null || !HasPlayfield)
+            {
+                return;
+            }
+
+            // Only the note field between the side rails — not the whole preview panel.
+            RectangleF bounds = NoteFieldBounds();
+            if (bounds.Width < 1f || bounds.Height < 1f)
+            {
+                return;
+            }
+
+            RectangleF dest = Cover(bounds, frame.Width, frame.Height);
+            if (dest.Width < 1f || dest.Height < 1f)
+            {
+                return;
+            }
+
+            var previous = g.InterpolationMode;
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            GraphicsState state = g.Save();
+            g.SetClip(bounds);
+            g.DrawImage(frame, dest);
+            g.Restore(state);
+            g.InterpolationMode = previous;
+        }
+
+        /// <summary>Uniform scale that fills <paramref name="bounds"/>, cropping overflow.</summary>
+        private static RectangleF Cover(RectangleF bounds, int pixelWidth, int pixelHeight)
+        {
+            if (pixelWidth <= 0 || pixelHeight <= 0 || bounds.Width <= 0f || bounds.Height <= 0f)
+            {
+                return RectangleF.Empty;
+            }
+
+            float scale = Math.Max(bounds.Width / pixelWidth, bounds.Height / pixelHeight);
+            float width = pixelWidth * scale;
+            float height = pixelHeight * scale;
+            return new RectangleF(
+                bounds.X + ((bounds.Width - width) / 2f),
+                bounds.Y + ((bounds.Height - height) / 2f),
+                width,
+                height);
+        }
+
+        private void DrawHalfChrome(Graphics g, bool isTopHalf, int laneCount, bool showBga)
         {
             double top = _fit.Y(TechnikaPlayfieldMetrics.HalfTop(isTopHalf));
             double height = _fit.Length(TechnikaPlayfieldMetrics.HalfHeight(isTopHalf));
             double left = _fit.X(0);
             double width = _fit.Length(TechnikaPlayfieldMetrics.NativeWidth);
 
-            using (var field = new SolidBrush(_theme.FieldFor(isTopHalf)))
+            if (!showBga)
             {
-                g.FillRectangle(field,
-                    (float)left, (float)top, (float)width, (float)height);
+                using (var field = new SolidBrush(_theme.FieldFor(isTopHalf)))
+                {
+                    g.FillRectangle(field,
+                        (float)left, (float)top, (float)width, (float)height);
+                }
             }
+            // When BGA is on the note field stays transparent so the video shows through;
+            // side rails still frame the tracks.
 
             // Side rails: the frame the touch strip sits in.
             double rail = _fit.Length(TechnikaPlayfieldMetrics.SidebarWidth);
@@ -283,8 +411,9 @@ namespace DJMaxEditor.Preview
                 }
             }
 
-            if (laneCount < 1)
+            if (laneCount < 1 || showBga)
             {
+                // With BGA on, skip lane rules so they do not score the video.
                 return;
             }
 
@@ -303,24 +432,20 @@ namespace DJMaxEditor.Preview
 
         private void DrawDividerChrome(Graphics g)
         {
+            // Match the arcade: a thin black bar across the note field only (not the rails).
             double coreTop = _fit.Y(TechnikaPlayfieldMetrics.DividerCoreTop);
-            double coreHeight = _fit.Length(TechnikaPlayfieldMetrics.DividerCoreHeight);
-            double left = _fit.X(0);
-            double width = _fit.Length(TechnikaPlayfieldMetrics.NativeWidth);
+            double coreHeight = Math.Max(1.0,
+                _fit.Length(TechnikaPlayfieldMetrics.DividerCoreHeight));
+            double left = _fit.X(TechnikaPlayfieldMetrics.SidebarWidth);
+            double width = _fit.Length(
+                TechnikaPlayfieldMetrics.NativeWidth -
+                (2.0 * TechnikaPlayfieldMetrics.SidebarWidth));
 
-            // A 1 px black rule, a 5 px core and another black rule; only the core is what
-            // the eye reads as "the divider".
-            using (var core = new SolidBrush(_theme.DividerCore))
+            using (var core = new SolidBrush(Color.Black))
             {
                 g.FillRectangle(core,
                     (float)left, (float)coreTop, (float)width, (float)coreHeight);
             }
-            g.DrawLine(_theme.DividerEdge,
-                (float)left, (float)Snap(coreTop),
-                (float)(left + width), (float)Snap(coreTop));
-            g.DrawLine(_theme.DividerEdge,
-                (float)left, (float)Snap(coreTop + coreHeight),
-                (float)(left + width), (float)Snap(coreTop + coreHeight));
         }
 
         private void DrawHeaderChrome(Graphics g)
@@ -452,7 +577,15 @@ namespace DJMaxEditor.Preview
             double headSize = Math.Max(4.0, size * _sprites.ScaleFor(note.Kind));
 
             bool prepare = note.State == GameplayPreviewNoteState.Prepare;
-            double opacity = (prepare ? PrepareOpacity : 1.0) * FaderOpacityFor(note);
+            // Active holds/repeat heads stay fully opaque: the arcade does not fade them
+            // out while the gesture is still being held.
+            bool keepSolid = note.State == GameplayPreviewNoteState.Active &&
+                (GameplayPreviewNoteKinds.HasHoldTrail(note.Kind) ||
+                    note.Kind == GameplayPreviewNoteKind.RepeatHead ||
+                    note.Kind == GameplayPreviewNoteKind.RepeatHeadHold);
+            double opacity = keepSolid
+                ? 1.0
+                : (prepare ? PrepareOpacity : 1.0) * FaderOpacityFor(note);
             if (opacity <= 0.01)
             {
                 // Fully faded by the note effector: no head, trail or approach - the
@@ -463,12 +596,15 @@ namespace DJMaxEditor.Preview
 
             DrawTrail(g, note, size, brushes, opacity);
 
-            // The head draws only while its own scan is on screen. A hold whose head the
-            // sweep has passed but whose tail is still ahead stays active for its body,
-            // and drawing its head at a stale scan position would park a struck note on
-            // the field behind the line. The trail above is the whole of it then.
+            // The head draws while its own scan is on screen. Holds and RepeatHeads stay
+            // drawn for the whole Active window (tail / series end) so the head does not
+            // vanish mid-gesture and leave only a washed-out trail.
             bool headVisible = note.ScanIndex == _frame.CurrentIntScan ||
                 note.ScanIndex == _frame.CurrentIntScan + 1;
+            if (!headVisible && keepSolid)
+            {
+                headVisible = true;
+            }
             if (!headVisible)
             {
                 return;
@@ -726,14 +862,18 @@ namespace DJMaxEditor.Preview
             bool ongoing = note.State == GameplayPreviewNoteState.Active &&
                 _frame.CurrentScan >= start && _frame.CurrentScan <= end;
 
+            // LongHoldNote: arcade longholdgauge body + line_nor_end cap (neon tube, opaque
+            // along length; soft alpha only on the authored top/bottom glow and end flare).
             TechnikaNoteSprite cap = _sprites.TrailCap(note.Kind, ongoing);
             if (cap == null)
             {
                 // No cap in the packaged sheets - only the actively-held trail variants ship
                 // nowhere - so a themed bar spans the segment at lower fidelity, which is what
-                // the trail drew for every kind before.
+                // the trail drew for every kind before. Active segments stay solid; waiting
+                // halves stay a lighter preview so they do not read as a fade-out of the hold.
                 double flat = size * 0.42;
-                using (var trail = new SolidBrush(WithAlpha(brushes.Fill, 0.55 * opacity)))
+                double trailAlpha = ongoing ? opacity : (0.55 * opacity);
+                using (var trail = new SolidBrush(WithAlpha(brushes.Fill, trailAlpha)))
                 {
                     g.FillRectangle(trail,
                         (float)Math.Min(fromPointX, toPointX),
@@ -749,12 +889,21 @@ namespace DJMaxEditor.Preview
             // 12's at the full 90, and that difference is visible.
             double height = size * _sprites.ScaleOf(cap);
             double aspect = cap.FrameSize > 0 ? cap.FrameWidth / cap.FrameSize : 1.0;
-            double capWidth = withCap ? Math.Min(length, height * aspect) : 0.0;
-            double body = length - capWidth;
+            // Drag (BasicNote) tips extend past the hold end — Trilogy draws longnoteline's
+            // rounded nose at x+duration. Hold/repeat caps still close flush at the end.
+            bool tipPastEnd = note.Kind == GameplayPreviewNoteKind.Drag;
+            double capWidth = withCap
+                ? (tipPastEnd ? height * aspect : Math.Min(length, height * aspect))
+                : 0.0;
 
             // Laid out along +x from the segment's start and mirrored when the sweep runs the
             // other way: the cap has a flat side and a round one, so drawing it unmirrored on
             // the lower half would point it back into the note.
+            //
+            // Hold/repeat: body through the end, cap overlaid so the authored soft flare sits
+            // on solid tube rather than an open cut. Drag: body only to the hold end, tip
+            // starting there and extending past — longnoteline's right-edge alpha is the
+            // rounded nose; parking that flare on the end made the tip look hollow.
             GraphicsState state = g.Save();
             try
             {
@@ -763,7 +912,7 @@ namespace DJMaxEditor.Preview
                 {
                     g.ScaleTransform(-1f, 1f);
                 }
-                if (body > 0)
+                if (length > 0)
                 {
                     // Stretched, not tiled: a body frame is one column of pixels, so every tile
                     // of it would be the same and the pitch has nothing to say. The drag curve
@@ -772,14 +921,17 @@ namespace DJMaxEditor.Preview
                     TechnikaNoteSprite sheet = _sprites.TrailBody(note.Kind, ongoing);
                     Image run = sheet == null ? cap.Stem(phase) : sheet.Frame(phase);
                     DrawImage(g, run,
-                        new RectangleF(0f, (float)(-height / 2.0), (float)body, (float)height),
+                        new RectangleF(0f, (float)(-height / 2.0), (float)length, (float)height),
                         opacity);
                 }
-                if (withCap)
+                if (withCap && capWidth > 0)
                 {
+                    float tipX = tipPastEnd
+                        ? (float)length
+                        : (float)(length - capWidth);
                     DrawImage(g, cap.Frame(phase),
                         new RectangleF(
-                            (float)body, (float)(-height / 2.0),
+                            tipX, (float)(-height / 2.0),
                             (float)capWidth, (float)height),
                         opacity);
                 }
@@ -1057,6 +1209,8 @@ namespace DJMaxEditor.Preview
         /// <summary>
         /// Whether a run line may join to this note: drawn, with its head's scan on
         /// screen, so a line never hangs off a head that has already been played.
+        /// Still-Active hold / Repeat heads stay joinable off their home scan so the
+        /// bar remains anchored until the gesture ends.
         /// </summary>
         private bool IsDrawn(ProjectedGameplayNote note)
         {
@@ -1065,8 +1219,15 @@ namespace DJMaxEditor.Preview
             {
                 return false;
             }
-            return note.ScanIndex == _frame.CurrentIntScan ||
-                note.ScanIndex == _frame.CurrentIntScan + 1;
+            if (note.ScanIndex == _frame.CurrentIntScan ||
+                note.ScanIndex == _frame.CurrentIntScan + 1)
+            {
+                return true;
+            }
+            return note.State == GameplayPreviewNoteState.Active &&
+                (GameplayPreviewNoteKinds.HasHoldTrail(note.Kind) ||
+                    note.Kind == GameplayPreviewNoteKind.RepeatHead ||
+                    note.Kind == GameplayPreviewNoteKind.RepeatHeadHold);
         }
 
         /// <summary>
@@ -1083,34 +1244,59 @@ namespace DJMaxEditor.Preview
             double size,
             double opacity)
         {
-            int previous = -1;
+            // Path follows chart time: head first, then members by pulse (then lane).
+            // Sorting by InsNum groups reused keysounds (eg-13/14/15…) and tangles the
+            // zigzag — STOP Pop EX @22080 is the textbook case; DJMAX STUDIO is pulse order.
+            var members = new List<int>(8);
             for (int i = 0; i < notes.Count; i++)
             {
-                if (_runOf[i] != run || !IsDrawn(notes[i]))
+                if (_runOf[i] == run && IsDrawn(notes[i]))
                 {
-                    continue;
+                    members.Add(i);
                 }
+            }
+            if (members.Count < 2)
+            {
+                return;
+            }
 
-                ProjectedGameplayNote note = notes[i];
-                if (previous >= 0)
+            members.Sort(delegate(int a, int b)
+            {
+                bool aHead = IsRunHead(notes[a].Kind);
+                bool bHead = IsRunHead(notes[b].Kind);
+                if (aHead != bHead)
                 {
-                    double ax = _fit.NoteX(notes[previous].X);
-                    double ay = _fit.NoteY(notes[previous].Y, notes[previous].IsTopHalf);
-                    double bx = _fit.NoteX(note.X);
-                    double by = _fit.NoteY(note.Y, note.IsTopHalf);
-                    double length = Distance(ax, ay, bx, by);
-                    double degrees = Bearing(ax, ay, bx, by);
-                    DrawRunBar(g, notes[previous].Kind, ax, ay, length, degrees, size, opacity);
-
-                    // The arrow answers "where does this chain go", so it is aimed at the
-                    // member the head is actually joined to. The -180 is the art's own
-                    // authored direction - see HeadArtDegrees: notepressstart points left.
-                    if (previous == head && IsRunHead(notes[head].Kind))
-                    {
-                        _headAngles[head] = degrees - HeadArtDegrees;
-                    }
+                    return aHead ? -1 : 1;
                 }
-                previous = i;
+                int pulse = notes[a].Pulse.CompareTo(notes[b].Pulse);
+                if (pulse != 0)
+                {
+                    return pulse;
+                }
+                return notes[a].Lane.CompareTo(notes[b].Lane);
+            });
+
+            for (int m = 1; m < members.Count; m++)
+            {
+                int previous = members[m - 1];
+                int next = members[m];
+                ProjectedGameplayNote from = notes[previous];
+                ProjectedGameplayNote to = notes[next];
+                double ax = _fit.NoteX(from.X);
+                double ay = _fit.NoteY(from.Y, from.IsTopHalf);
+                double bx = _fit.NoteX(to.X);
+                double by = _fit.NoteY(to.Y, to.IsTopHalf);
+                double length = Distance(ax, ay, bx, by);
+                double degrees = Bearing(ax, ay, bx, by);
+                DrawRunBar(g, from.Kind, ax, ay, length, degrees, size, opacity);
+
+                // The arrow answers "where does this chain go", so it is aimed at the
+                // member the head is actually joined to. The -180 is the art's own
+                // authored direction - see HeadArtDegrees: notepressstart points left.
+                if (previous == head && IsRunHead(notes[head].Kind))
+                {
+                    _headAngles[head] = degrees - HeadArtDegrees;
+                }
             }
         }
 

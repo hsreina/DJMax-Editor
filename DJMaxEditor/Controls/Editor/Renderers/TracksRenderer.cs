@@ -1,3 +1,4 @@
+using DJMaxEditor.Controls.Editor.Renderers.Events;
 using DJMaxEditor.DJMax;
 using System;
 using System.Drawing;
@@ -152,6 +153,13 @@ namespace DJMaxEditor.Controls.Editor.Renderers
             var virtualTrackheight = VirtualTrackheight;
             const int halfNote = EventsRenderer.VirtualNoteWidth / 2;
 
+            // Repeat (per-lane) and Press/chain (cross-lane, tick order) under notes.
+            var technikaTheme = m_eventsRenderer.Theme as TechnikaThemeRenderer;
+            if (technikaTheme != null)
+            {
+                technikaTheme.RenderSeriesLinks(g, tracksList, bounds);
+            }
+
             foreach (var track in tracksList)
             {
                 int trackIndex = (int)track.Idx;
@@ -172,11 +180,15 @@ namespace DJMaxEditor.Controls.Editor.Renderers
                 foreach (var eventData in track.Events)
                 {
                     int eventX = eventData.VirtualTick;
+                    // Duration > 6 is the editor's long-note gate (same as GetEventRectangle):
+                    // a hold's body must keep the note in the cull window after the head
+                    // has scrolled off the left edge.
+                    int span = eventData.Duration > 6 ? eventData.VirtualDuration : 0;
                     if (eventX - halfNote > clipRight)
                     {
                         break;
                     }
-                    if (eventX + halfNote < clipLeft)
+                    if (eventX + span + halfNote < clipLeft)
                     {
                         continue;
                     }

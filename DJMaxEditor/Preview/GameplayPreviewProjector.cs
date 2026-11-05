@@ -162,6 +162,12 @@ namespace DJMaxEditor.Preview
         /// </summary>
         public double ApproachScanDistance { get; internal set; }
 
+        /// <summary>
+        /// Pulse through which this note stays Active. For a RepeatHead that anchors a
+        /// series, this is the last member's end so the head does not vanish mid-run.
+        /// </summary>
+        public int ResolveThroughPulse { get; internal set; }
+
         internal ProjectedGameplayNote Copy()
         {
             return (ProjectedGameplayNote)MemberwiseClone();
@@ -350,11 +356,18 @@ namespace DJMaxEditor.Preview
                     // Only a hold answers for its tail: every note carries a keysound-length
                     // duration, so reading the raw tail for a tap would keep it lit behind
                     // the sweep until its sample "ends". A tap is Resolved the instant the
-                    // sweep clears its head.
+                    // sweep clears its head — except a RepeatHead, whose ResolveThroughPulse
+                    // reaches the last tick of its series so the head stays until the run ends.
                     double noteFloatScan = topology.Pulse / pulsesPerScan;
                     double endFloatScan = GameplayPreviewNoteKinds.HasHoldTrail(topology.Kind)
                         ? (topology.Pulse + topology.DurationPulse) / pulsesPerScan
                         : noteFloatScan;
+                    if (topology.ResolveThroughPulse > topology.Pulse)
+                    {
+                        endFloatScan = Math.Max(
+                            endFloatScan,
+                            topology.ResolveThroughPulse / pulsesPerScan);
+                    }
                     double distance = currentScan - noteFloatScan;
 
                     if (currentScan > endFloatScan)
@@ -771,8 +784,12 @@ namespace DJMaxEditor.Preview
             // among them). An end marker therefore joins the series but does not close it;
             // only a fresh head or a non-repeat note on the same lane does.
             var endSeenByLane = new bool[4];
-            foreach (ProjectedGameplayNote note in notes)
+            var headIndexByLane = new int[] { -1, -1, -1, -1 };
+            for (int i = 0; i < notes.Count; i++)
             {
+                ProjectedGameplayNote note = notes[i];
+                note.ResolveThroughPulse = ResolveEndPulse(note);
+
                 if (note.Kind == GameplayPreviewNoteKind.RepeatHead ||
                     note.Kind == GameplayPreviewNoteKind.RepeatHeadHold)
                 {
@@ -782,11 +799,13 @@ namespace DJMaxEditor.Preview
                         note.Kind = note.Kind == GameplayPreviewNoteKind.RepeatHeadHold
                             ? GameplayPreviewNoteKind.RepeatHold
                             : GameplayPreviewNoteKind.Repeat;
+                        ExtendResolveThrough(notes, headIndexByLane[note.Lane], note);
                     }
                     else
                     {
                         openByLane[note.Lane] = true;
                         endSeenByLane[note.Lane] = false;
+                        headIndexByLane[note.Lane] = i;
                     }
                 }
                 else if (note.Kind == GameplayPreviewNoteKind.Repeat ||
@@ -795,6 +814,7 @@ namespace DJMaxEditor.Preview
                     if (openByLane[note.Lane])
                     {
                         endSeenByLane[note.Lane] = true;
+                        ExtendResolveThrough(notes, headIndexByLane[note.Lane], note);
                     }
                     else
                     {
@@ -810,6 +830,7 @@ namespace DJMaxEditor.Preview
                     // series; anything happening in other lanes is irrelevant.
                     openByLane[note.Lane] = false;
                     endSeenByLane[note.Lane] = false;
+                    headIndexByLane[note.Lane] = -1;
                 }
             }
 
@@ -819,6 +840,37 @@ namespace DJMaxEditor.Preview
                 {
                     diagnostics.Add("Unclosed repeat series on lane " + lane + ".");
                 }
+            }
+        }
+
+        private static int ResolveEndPulse(ProjectedGameplayNote note)
+        {
+            if (note == null)
+            {
+                return 0;
+            }
+            if (GameplayPreviewNoteKinds.HasHoldTrail(note.Kind) && note.DurationPulse > 0)
+            {
+                return note.Pulse + note.DurationPulse;
+            }
+            return note.Pulse;
+        }
+
+        private static void ExtendResolveThrough(
+            IList<ProjectedGameplayNote> notes,
+            int headIndex,
+            ProjectedGameplayNote member)
+        {
+            if (notes == null || headIndex < 0 || headIndex >= notes.Count || member == null)
+            {
+                return;
+            }
+
+            int end = ResolveEndPulse(member);
+            ProjectedGameplayNote head = notes[headIndex];
+            if (end > head.ResolveThroughPulse)
+            {
+                head.ResolveThroughPulse = end;
             }
         }
 

@@ -26,6 +26,13 @@ namespace DJMaxEditor
 
         public event EventHandler ViewSettingsChanged;
 
+        /// <summary>
+        /// Raised when the owner parks the playhead by clicking empty timeline space.
+        /// Argument is the snapped virtual tick. MainForm restarts playback from that
+        /// spot when the transport is already running.
+        /// </summary>
+        public event EventHandler<int> PlayheadSeekRequested;
+
         public UndoManager UndoManager = UndoManager.GetInstance();
 
         public const float MinZoom = 0.20f;
@@ -1258,7 +1265,31 @@ namespace DJMaxEditor
                 if (res)
                 {
                     return;
-                }                
+                }
+            }
+
+            // Empty Select click: park the playhead so Play can start mid-chart
+            // (keysound calibration). Snapped to the same grid as note placement.
+            if (e.Button == MouseButtons.Left &&
+                activeTool == TimelineTool.Select &&
+                !additiveSelection &&
+                _selectMode != null)
+            {
+                int seekTick = Math.Max(0, _selectMode.EvaluateBlock(virtualX, true));
+                SetPlayheadPosition(seekTick);
+                if (_playerData != null)
+                {
+                    _playerData.CurrentTick = seekTick / EventData.VirtualTickSize;
+                }
+                if (PlayheadSeekRequested != null)
+                {
+                    PlayheadSeekRequested(this, seekTick);
+                }
+                if (!IsPlayerPlaying)
+                {
+                    Redraw();
+                }
+                return;
             }
 
             if (leftAndControlPressed) {

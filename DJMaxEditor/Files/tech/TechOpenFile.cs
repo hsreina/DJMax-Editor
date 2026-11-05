@@ -30,6 +30,10 @@ namespace DJMaxEditor.Files.Tech
             {
                 playerData = TechmaniaChartSerializer.Parse(
                     File.ReadAllBytes(filename), Math.Max(0, SelectedPatternIndex));
+                // Some DJMAX-converted patterns (e.g. Everything Star/Pop) start a long
+                // 0-*.ogg BGM stem but place no trailing end marker past the last keysound.
+                // Extend the document end so playback covers that audio tail.
+                ApplyBgmAudioTail(playerData, Path.GetDirectoryName(filename));
                 return true;
             }
             catch (ChartLoadException)
@@ -41,6 +45,90 @@ namespace DJMaxEditor.Files.Tech
                 throw new ChartLoadException(ChartLoadError.Unexpected,
                     "The TECHMANIA track file could not be read.", null, ex);
             }
+        }
+
+        /// <summary>
+        /// Raises <see cref="PlayerData.HeaderEndTick"/> to cover each <c>0-…</c> BGM stem's
+        /// file length past its trigger tick. Notes-only MaxTick stops early on charts that
+        /// omit a silent end marker (Everything Star/Pop); Q difficulties that already carry
+        /// one keep the later authored end via the max().
+        /// </summary>
+        private static void ApplyBgmAudioTail(PlayerData playerData, string chartDirectory)
+        {
+            if (playerData == null || playerData.Tracks == null ||
+                string.IsNullOrEmpty(chartDirectory) || playerData.Tempo <= 0f)
+            {
+                return;
+            }
+
+            int endTick = playerData.MaxTick;
+            foreach (TrackData track in playerData.Tracks)
+            {
+                if (track == null || track.Events == null)
+                {
+                    continue;
+                }
+
+                foreach (EventData evt in track.Events)
+                {
+                    if (evt == null || evt.EventType != EventType.Note ||
+                        evt.Instrument == null)
+                    {
+                        continue;
+                    }
+
+                    string name = evt.Instrument.Name;
+                    if (string.IsNullOrEmpty(name) ||
+                        !name.StartsWith("0-", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    string path = Path.Combine(chartDirectory, name);
+                    double seconds = OggVorbisDuration.TryGetSeconds(path);
+                    if (seconds <= 0.0)
+                    {
+                        continue;
+                    }
+
+                    int tail = evt.Tick + SecondsToNativeTicks(seconds, playerData.Tempo);
+                    if (tail > endTick)
+                    {
+                        endTick = tail;
+                    }
+                }
+            }
+
+            if (endTick > playerData.MaxTick)
+            {
+                playerData.HeaderEndTick = (uint)endTick;
+            }
+
+            // Keep TrackDuration in sync with the resolved end for transports that read it.
+            if (endTick > 0 && playerData.Tempo > 0f)
+            {
+                double seconds = endTick / (playerData.Tempo / 60.0 * 48.0);
+                if (seconds > playerData.TrackDuration)
+                {
+                    playerData.TrackDuration = (float)seconds;
+                }
+            }
+        }
+
+        private static int SecondsToNativeTicks(double seconds, float tempo)
+        {
+            if (seconds <= 0.0 || tempo <= 0f)
+            {
+                return 0;
+            }
+
+            double ticks = seconds * (tempo / 60.0) * 48.0;
+            if (double.IsNaN(ticks) || double.IsInfinity(ticks) || ticks <= 0.0)
+            {
+                return 0;
+            }
+
+            return (int)Math.Ceiling(ticks);
         }
 
         /// <summary>

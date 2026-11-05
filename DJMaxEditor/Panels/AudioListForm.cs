@@ -35,6 +35,67 @@ namespace DJMaxEditor
         public AudioListForm() 
         {
             InitializeComponent();
+            ConfigureSoundList();
+        }
+
+        protected override void OnLoad(EventArgs e)
+        {
+            base.OnLoad(e);
+            // StudioTheme.ApplyDataGrid may run after construction and widen padding /
+            // row height; keep the Sounds list compact once the handle exists.
+            ApplyCompactCellStyle();
+        }
+
+        /// <summary>
+        /// Narrow index column + fill filename, with user-resizable divider.
+        /// Auto-generated equal Fill columns left a huge gap between # and name.
+        /// </summary>
+        private void ConfigureSoundList()
+        {
+            SoundList.AutoGenerateColumns = false;
+            SoundList.Columns.Clear();
+            SoundList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "InsNum",
+                HeaderText = "#",
+                Name = "InsNum",
+                Width = 36,
+                MinimumWidth = 28,
+                FillWeight = 18,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.None,
+                ReadOnly = true,
+                Resizable = DataGridViewTriState.True,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            });
+            SoundList.Columns.Add(new DataGridViewTextBoxColumn
+            {
+                DataPropertyName = "Name",
+                HeaderText = "File",
+                Name = "Name",
+                MinimumWidth = 48,
+                FillWeight = 100,
+                AutoSizeMode = DataGridViewAutoSizeColumnMode.Fill,
+                ReadOnly = true,
+                Resizable = DataGridViewTriState.True,
+                SortMode = DataGridViewColumnSortMode.NotSortable
+            });
+            ApplyCompactCellStyle();
+        }
+
+        private void ApplyCompactCellStyle()
+        {
+            var pad = new Padding(4, 1, 4, 1);
+            SoundList.DefaultCellStyle.Padding = pad;
+            SoundList.AlternatingRowsDefaultCellStyle.Padding = pad;
+            SoundList.ColumnHeadersDefaultCellStyle.Padding = pad;
+            SoundList.RowTemplate.Height = 22;
+            if (SoundList.Columns.Contains("InsNum"))
+            {
+                SoundList.Columns["InsNum"].Width = Math.Max(
+                    SoundList.Columns["InsNum"].MinimumWidth, 36);
+                SoundList.Columns["InsNum"].DefaultCellStyle.Alignment =
+                    DataGridViewContentAlignment.MiddleRight;
+            }
         }
 
         public InstrumentData GetCurrentSelection()

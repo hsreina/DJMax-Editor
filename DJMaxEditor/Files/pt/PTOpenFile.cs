@@ -101,8 +101,6 @@ namespace DJMaxEditor
             playerData.TrackDuration = trackDuration;
             playerData.TickPerMinute = tickPerMinute;
             playerData.Tempo = tempo2;
-            playerData.HeaderEndTick = headerEndTick;
-
 
             //Logs.Write("version : {0}", version);
 
@@ -112,6 +110,9 @@ namespace DJMaxEditor
             stream.Seek(0x18);
 
             playerData.Clear();
+            // After Clear: keep the PT header end / audio length. Assign here so the authored
+            // end cannot be lost relative to refill.
+            playerData.HeaderEndTick = headerEndTick;
 
             playerData.Instruments.Add(new InstrumentData()
             {

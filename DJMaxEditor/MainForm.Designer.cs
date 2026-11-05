@@ -390,10 +390,10 @@ namespace DJMaxEditor
             this.windowsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.propertiesToolStripMenuItem1,
             this.debugOutpuToolStripMenuItem,
-            this.soundsToolStripMenuItem1,
-            this.fMODInformationsToolStripMenuItem1,
             this.notesToolStripMenuItem1,
-            this.eventsToolStripMenuItem});
+            this.soundsToolStripMenuItem1,
+            this.eventsToolStripMenuItem,
+            this.fMODInformationsToolStripMenuItem1});
             this.windowsToolStripMenuItem.Name = "windowsToolStripMenuItem";
             this.windowsToolStripMenuItem.Size = new System.Drawing.Size(78, 26);
             this.windowsToolStripMenuItem.Text = "Window";

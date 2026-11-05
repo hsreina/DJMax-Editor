@@ -254,6 +254,23 @@ namespace DJMaxEditor.Controls.Editor
 
         private const int MaxScaledImageCacheEntries = 256;
 
+        public void DrawLine(Pen pen, float x1, float y1, float x2, float y2)
+        {
+            var graphics = m_graphics;
+            if (graphics == null || pen == null)
+            {
+                return;
+            }
+            if (m_deviceSpace)
+            {
+                graphics.DrawLine(pen,
+                    MapX(x1, y1), MapY(x1, y1),
+                    MapX(x2, y2), MapY(x2, y2));
+                return;
+            }
+            graphics.DrawLine(pen, x1, y1, x2, y2);
+        }
+
         public void DrawRectangle(Pen pen, int x, int y, int width, int height)
         {
             var graphics = m_graphics;

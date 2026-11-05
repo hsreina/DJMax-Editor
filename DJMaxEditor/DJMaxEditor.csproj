@@ -83,6 +83,21 @@
     <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
     </Reference>
+    <Reference Include="SharpDX, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.4.2.0\lib\net45\SharpDX.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Direct3D9, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.Direct3D9.4.2.0\lib\net45\SharpDX.Direct3D9.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.DXGI, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.DXGI.4.2.0\lib\net45\SharpDX.DXGI.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Mathematics, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.Mathematics.4.2.0\lib\net45\SharpDX.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.MediaFoundation, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.MediaFoundation.4.2.0\lib\net45\SharpDX.MediaFoundation.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
     <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
       <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
@@ -194,6 +209,18 @@
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UI\StudioTheme.cs" />
+    <Compile Include="Video\BgaClockMap.cs" />
+    <Compile Include="Video\BgaPlayer.cs" />
+    <Compile Include="Video\BgaPreviewControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Video\BgaPreviewForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Video\BgaSourceResolver.cs" />
+    <Compile Include="Video\IBgaSource.cs" />
+    <Compile Include="Video\MediaFoundationBgaSource.cs" />
+    <Compile Include="Video\NullBgaSource.cs" />
     <Compile Include="Controls\Editor\DisplayRefreshRate.cs" />
     <Compile Include="Controls\Editor\EditorRenderControl.cs">
       <SubType>UserControl</SubType>
@@ -236,6 +263,7 @@
     </Compile>
     <Compile Include="Files\tech\TechOpenFile.cs" />
     <Compile Include="Files\tech\TechSaveFile.cs" />
+    <Compile Include="Files\tech\OggVorbisDuration.cs" />
     <Compile Include="Files\bms\BMESaveFile.cs" />
     <Compile Include="Files\bms\BmsChartSerializer.cs" />
     <Compile Include="Files\bms\BmsonChartSerializer.cs" />

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.IO;
 using System.Threading;
 using System.Windows.Forms;
 using DJMaxEditor.DJMax;
@@ -30,6 +31,9 @@ namespace DJMaxEditor.Preview
         private readonly StudioDropdown _speed;
         private readonly StudioDropdown _spriteSet;
         private readonly Button _browseSpriteRoot;
+        private readonly StudioDropdown _bgaToggle;
+        private readonly Button _bgaLoadButton;
+        private bool _updatingBga;
 
         /// <summary>The owner-picked manual speed, remembered across binds so a
         /// PT/TECH chart keeps the last choice instead of snapping back.</summary>
@@ -181,8 +185,7 @@ namespace DJMaxEditor.Preview
                 }
                 ApplySpriteStyle(_spriteStyles[_spriteSet.SelectedIndex]);
             };
-            _browseSpriteRoot = StudioDesignSystem.CreateDeckButton("…");
-            _browseSpriteRoot.Size = new Size(24, 21);
+            _browseSpriteRoot = CreateImportButton();
             _browseSpriteRoot.Click += delegate { BrowseSpriteRoot(); };
 
             var effectorsCaption = new Label
@@ -208,9 +211,31 @@ namespace DJMaxEditor.Preview
             // Sprite set first (it persists, unlike the session effectors), then
             // the note-size slider; the EFFECTORS caption gets a row of its own
             // above the arcade effector group, and the speed combo trails LINE.
+            _preview = new GameplayPreviewControl();
+            _preview.BgaChanged += delegate { SyncBgaToggleUi(); UpdateStatus(); };
+
+            _bgaToggle = BuildEffectorCombo(new object[] { "ON", "OFF" });
+            _bgaToggle.SelectedIndexChanged += delegate
+            {
+                if (_updatingBga || _bgaToggle.SelectedIndex < 0)
+                {
+                    return;
+                }
+                _preview.BgaEnabled = _bgaToggle.SelectedIndex == 0;
+                UpdateStatus();
+            };
+            _bgaLoadButton = CreateImportButton();
+            _bgaLoadButton.Click += delegate { BrowseBga(); };
+
+            var importTips = new ToolTip();
+            importTips.SetToolTip(_browseSpriteRoot, "Locate Technika 3 note assets");
+            importTips.SetToolTip(_bgaLoadButton, "Load BGA video");
+
             Control spriteSetUnit = BuildEffectorUnit(
                 "SPRITE SET", _spriteSet, 126, 28, 35, _browseSpriteRoot);
             Control noteSizeUnit = BuildEffectorUnit("NOTE SIZE", _zoom, 180, 0, 44);
+            Control speedUnit = BuildEffectorUnit("SPEED", _speed);
+            Control bgaUnit = BuildEffectorUnit("BGA", _bgaToggle, 90, 28, 35, _bgaLoadButton);
             effectorRow.Controls.Add(spriteSetUnit);
             effectorRow.Controls.Add(noteSizeUnit);
             effectorRow.SetFlowBreak(noteSizeUnit, true);
@@ -219,7 +244,8 @@ namespace DJMaxEditor.Preview
             effectorRow.Controls.Add(BuildEffectorUnit("TimeLine", _scroll));
             effectorRow.Controls.Add(BuildEffectorUnit("NOTE FADER", _fader));
             effectorRow.Controls.Add(BuildEffectorUnit("LINE", _line));
-            effectorRow.Controls.Add(BuildEffectorUnit("SPEED", _speed));
+            effectorRow.Controls.Add(speedUnit);
+            effectorRow.Controls.Add(bgaUnit);
 
             // Docking stacks children in reverse add order: title, then status,
             // then the wrapping effector row at the bottom of the header.
@@ -232,7 +258,6 @@ namespace DJMaxEditor.Preview
             title.Resize += sync;
             _status.Resize += sync;
 
-            _preview = new GameplayPreviewControl();
             Controls.Add(_preview);
             Controls.Add(header);
             SelectSpriteStyle(TechnikaSpriteCatalog.Resolve(
@@ -571,15 +596,79 @@ namespace DJMaxEditor.Preview
             string source = _preview.Profile == GameplayPreviewProfile.Technika
                 ? "  |  " + _preview.SpriteSourceLabel
                 : string.Empty;
+            string bga = string.Empty;
+            if (_preview.BgaIsOpen)
+            {
+                bga = _preview.BgaEnabled
+                    ? "  |  BGA ON"
+                    : "  |  BGA OFF";
+                if (!string.IsNullOrEmpty(_preview.BgaStatusText))
+                {
+                    bga += "  " + _preview.BgaStatusText;
+                }
+            }
+
             _status.Text = _preview.ProjectionStatus +
                 "  |  TICK " + _preview.CurrentTick +
                 source +
+                bga +
                 (_preview.DiagnosticCount == 0
                     ? string.Empty
                     : "  |  " + _preview.DiagnosticCount + " WARNING(S)");
             _status.ForeColor = _preview.DiagnosticCount == 0
                 ? StudioDesignSystem.Muted
                 : StudioDesignSystem.SignalAmber;
+        }
+
+        private void SyncBgaToggleUi()
+        {
+            _bgaToggle.Enabled = true;
+            _bgaLoadButton.Enabled = true;
+            int want = _preview.BgaEnabled ? 0 : 1;
+            if (_bgaToggle.SelectedIndex == want)
+            {
+                return;
+            }
+            _updatingBga = true;
+            try
+            {
+                _bgaToggle.SelectedIndex = want;
+            }
+            finally
+            {
+                _updatingBga = false;
+            }
+        }
+
+        private void BrowseBga()
+        {
+            using (var dialog = new OpenFileDialog())
+            {
+                dialog.Filter =
+                    "Video|*.mp4;*.wmv;*.avi;*.mkv;*.mov;*.bik|" +
+                    "Technika preview (Bink)|*.bik;*.bik2;*.bk2|" +
+                    "All files|*.*";
+                dialog.Title = "Load BGA video";
+                if (_preview.Document != null &&
+                    !string.IsNullOrEmpty(_preview.Document.SourcePath))
+                {
+                    try
+                    {
+                        dialog.InitialDirectory =
+                            Path.GetDirectoryName(_preview.Document.SourcePath);
+                    }
+                    catch (Exception)
+                    {
+                    }
+                }
+
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    return;
+                }
+
+                _ = _preview.LoadBgaAsync(dialog.FileName);
+            }
         }
 
         private bool IsPlaybackVisible()
@@ -646,6 +735,18 @@ namespace DJMaxEditor.Preview
             combo.Items.AddRange(items);
             combo.SelectedIndex = 0;
             return combo;
+        }
+
+        /// <summary>Compact deck button with the shared preview import glyph
+        /// (sprite-set folder browse and BGA load).</summary>
+        private static Button CreateImportButton()
+        {
+            Button button = StudioDesignSystem.CreateDeckButton(string.Empty);
+            button.Size = new Size(24, 21);
+            button.Padding = Padding.Empty;
+            button.Image = Resources.preview_import;
+            button.ImageAlign = ContentAlignment.MiddleCenter;
+            return button;
         }
     }
 }

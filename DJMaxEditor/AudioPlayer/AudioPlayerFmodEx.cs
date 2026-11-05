@@ -194,7 +194,7 @@ namespace DJMaxEditor
             Array.Clear(_channels, 0, _channels.Length);
         }
 
-        public bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offset = 0, bool audition = false)
+        public bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offsetMilliseconds = 0, bool audition = false)
         {
             channelIndex %= MAX_CHANNEL;
 
@@ -245,16 +245,36 @@ namespace DJMaxEditor
                 }
                 chan.setVolume(volume);
                 chan.setPan(fpan);
-                chan.setPaused(false);
 
-                if (offset != 0)
+                // Seek while still paused so the first audible buffer is already mid-sample
+                // (BGM restore on mid-chart play).
+                if (offsetMilliseconds != 0)
                 {
-                    Logs.Write("Seek sound {0} to position {1} ms", soundIndex, offset);
-                    chan.setPosition(offset, FMODEX.TIMEUNIT.PCM);
+                    chan.setPosition(offsetMilliseconds, FMODEX.TIMEUNIT.MS);
                 }
+                chan.setPaused(false);
             }
 
             return result == FMODEX.RESULT.OK;
+        }
+
+        public uint GetSoundLengthMilliseconds(uint soundIndex)
+        {
+            if (soundIndex >= MAX_SOUND)
+            {
+                return 0;
+            }
+            FMODEX.Sound sound = CurrentTable.Sounds[soundIndex];
+            if (sound == null)
+            {
+                return 0;
+            }
+            uint length = 0;
+            if (sound.getLength(ref length, FMODEX.TIMEUNIT.MS) != FMODEX.RESULT.OK)
+            {
+                return 0;
+            }
+            return length;
         }
 
         public bool SetVolume(uint channelIndex, float volume)

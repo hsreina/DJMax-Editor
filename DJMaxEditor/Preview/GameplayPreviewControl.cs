@@ -1,10 +1,15 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
+using DJMaxEditor.DJMax;
 using DJMaxEditor.Editor;
+using DJMaxEditor.Files.Tech;
 using DJMaxEditor.UI;
+using DJMaxEditor.Video;
 
 namespace DJMaxEditor.Preview
 {
@@ -18,6 +23,11 @@ namespace DJMaxEditor.Preview
         private float _noteZoom = 1.0f;
         private readonly TechnikaPlayfieldRenderer _technikaRenderer =
             new TechnikaPlayfieldRenderer();
+        private readonly BgaPlayer _bga = new BgaPlayer();
+        private readonly BgaClockMap _bgaClock = new BgaClockMap();
+        private bool _bgaEnabled = true;
+        private int _bgaAttachGeneration;
+        private string _bgaPath;
 
         public GameplayPreviewControl()
         {
@@ -190,6 +200,38 @@ namespace DJMaxEditor.Preview
             get { return _projection == null ? 0 : _projection.Diagnostics.Count; }
         }
 
+        /// <summary>When true and a video is loaded, the BGA paints under the playfield notes.</summary>
+        public bool BgaEnabled
+        {
+            get { return _bgaEnabled; }
+            set
+            {
+                if (_bgaEnabled == value)
+                {
+                    return;
+                }
+                _bgaEnabled = value;
+                Invalidate();
+            }
+        }
+
+        public bool BgaIsOpen
+        {
+            get { return _bga.IsOpen; }
+        }
+
+        public string BgaStatusText
+        {
+            get { return _bga.StatusText; }
+        }
+
+        public string BgaPath
+        {
+            get { return _bgaPath; }
+        }
+
+        public event EventHandler BgaChanged;
+
         public void Bind(EditorDocumentContext document)
         {
             if (_document != null)
@@ -207,6 +249,7 @@ namespace DJMaxEditor.Preview
                 _document.UndoManager.OnUndoRedo += DocumentUndoRedo;
             }
             RebuildProjection();
+            AttachBgaForDocument(document);
         }
 
         public void SetProfile(GameplayPreviewProfile profile)
@@ -232,16 +275,87 @@ namespace DJMaxEditor.Preview
                 _frame = _projection.CreateRenderableFrame(
                     _document.Model.CurrentTick, _scrollSpeed);
             }
+            SyncBga();
             Invalidate();
+        }
+
+        /// <summary>Opens a BGA file for the backdrop. Returns false when the decoder rejects it.</summary>
+        public async Task<bool> LoadBgaAsync(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            _bgaPath = path;
+            int generation = ++_bgaAttachGeneration;
+            string playable = path;
+
+            if (BgaSourceResolver.RequiresTranscode(path))
+            {
+                string resolved = null;
+                string failure = null;
+                await Task.Run(() =>
+                {
+                    if (!BgaSourceResolver.TryResolve(path, out resolved, out failure))
+                    {
+                        resolved = null;
+                    }
+                }).ConfigureAwait(true);
+
+                if (generation != _bgaAttachGeneration)
+                {
+                    return false;
+                }
+
+                if (resolved == null)
+                {
+                    Logs.Write("BGA: transcode failed: {0} for {1}", failure, path);
+                    RaiseBgaChanged();
+                    return false;
+                }
+
+                playable = resolved;
+            }
+
+            if (generation != _bgaAttachGeneration)
+            {
+                return false;
+            }
+
+            string error;
+            bool ok = _bga.TryOpen(playable, out error);
+            if (!ok)
+            {
+                Logs.Write("BGA: open failed: {0} for {1}", error, playable);
+            }
+            SyncBga();
+            Invalidate();
+            RaiseBgaChanged();
+            return ok;
+        }
+
+        public void ClearBga()
+        {
+            _bgaAttachGeneration++;
+            _bgaPath = null;
+            _bga.Clear();
+            _bgaClock.Clear();
+            Invalidate();
+            RaiseBgaChanged();
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _document != null)
+            if (disposing)
             {
-                _document.Model.Tracks.EventAdded -= ChartTopologyChanged;
-                _document.Model.Tracks.EventRemoved -= ChartTopologyChanged;
-                _document.UndoManager.OnUndoRedo -= DocumentUndoRedo;
+                if (_document != null)
+                {
+                    _document.Model.Tracks.EventAdded -= ChartTopologyChanged;
+                    _document.Model.Tracks.EventRemoved -= ChartTopologyChanged;
+                    _document.UndoManager.OnUndoRedo -= DocumentUndoRedo;
+                }
+                _bga.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -259,6 +373,8 @@ namespace DJMaxEditor.Preview
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.Clear(StudioDesignSystem.Void);
 
+            bool showBga = _bgaEnabled && _bga.IsOpen && _bga.CurrentBitmap != null;
+
             Rectangle viewport = ClientRectangle;
             viewport.Inflate(-12, -12);
             if (viewport.Width <= 0 || viewport.Height <= 0) return;
@@ -272,12 +388,181 @@ namespace DJMaxEditor.Preview
             if (_projection.Profile == GameplayPreviewProfile.Technika)
             {
                 _technikaRenderer.Paint(
-                    graphics, viewport, _projection, _frame, _noteZoom);
+                    graphics, viewport, _projection, _frame, _noteZoom,
+                    showBga ? _bga.CurrentBitmap : null,
+                    showBga);
             }
             else
             {
+                if (showBga)
+                {
+                    DrawGenericBga(graphics, viewport, _bga.CurrentBitmap);
+                }
                 DrawGenericFrame(graphics, viewport);
             }
+        }
+
+        private void AttachBgaForDocument(EditorDocumentContext document)
+        {
+            _bgaAttachGeneration++;
+            _bga.Clear();
+            _bgaPath = null;
+            _bgaClock.Clear();
+
+            if (document == null || document.Model == null)
+            {
+                RaiseBgaChanged();
+                return;
+            }
+
+            ReloadBgaClock(document.Model);
+
+            string discovered = DiscoverBgaPath(document);
+            if (!string.IsNullOrEmpty(discovered))
+            {
+                _ = LoadBgaAsync(discovered);
+            }
+            else
+            {
+                RaiseBgaChanged();
+            }
+        }
+
+        private void SyncBga()
+        {
+            if (!_bgaEnabled || !_bga.IsOpen || _document == null || _document.Model == null)
+            {
+                return;
+            }
+
+            // Prefer the document playhead: VirtualCurrentTick is the same source the
+            // timeline and VideoStart marker share. Frame.CurrentTick is a rounded native
+            // copy of that value and must not drift the BGA relative to the cue.
+            int virtualTick = _document.Model.VirtualCurrentTick;
+            _bga.Seek(_bgaClock.TimeForVirtualTick(virtualTick));
+        }
+
+        private void ReloadBgaClock(PlayerData model)
+        {
+            _bgaClock.Clear();
+            if (model == null)
+            {
+                return;
+            }
+
+            _bgaClock.Load(model);
+            _bgaClock.Offset = ResolveBgaOffset(model, _bgaClock);
+        }
+
+        private void RaiseBgaChanged()
+        {
+            EventHandler handler = BgaChanged;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
+
+        private static string DiscoverBgaPath(EditorDocumentContext document)
+        {
+            if (document == null)
+            {
+                return null;
+            }
+
+            PlayerData model = document.Model;
+            TechMetadata tech = model != null ? model.TechMetadata : null;
+            if (tech != null && !string.IsNullOrEmpty(tech.Bga) &&
+                !string.IsNullOrEmpty(document.SourcePath))
+            {
+                try
+                {
+                    string folder = Path.GetDirectoryName(document.SourcePath);
+                    string candidate = Path.Combine(folder ?? string.Empty, tech.Bga);
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return BgaSourceResolver.FindForChart(document.SourcePath);
+        }
+
+        /// <summary>
+        /// TECHMANIA <c>bgaOffset</c> delays (+) / advances (-) the video. When the chart
+        /// already carries an Attr-100 VideoStart (including the one tech import drops on
+        /// track 17 at bgaOffset ticks), that marker alone owns sync — applying Offset on
+        /// top double-shifts the picture.
+        /// </summary>
+        private static TimeSpan ResolveBgaOffset(PlayerData model, BgaClockMap clock)
+        {
+            if (clock != null && clock.HasVideoStartMarker)
+            {
+                return TimeSpan.Zero;
+            }
+
+            if (model == null || model.TechMetadata == null)
+            {
+                return TimeSpan.Zero;
+            }
+
+            double seconds = model.TechMetadata.BgaOffset;
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds == 0.0)
+            {
+                return TimeSpan.Zero;
+            }
+
+            // TimeForVirtualTick adds Offset; positive bgaOffset must delay → negate.
+            return TimeSpan.FromSeconds(-seconds);
+        }
+
+        private static void DrawGenericBga(Graphics graphics, Rectangle viewport, Image frame)
+        {
+            if (frame == null)
+            {
+                return;
+            }
+
+            RectangleF dest = Cover(viewport, frame.Width, frame.Height);
+            if (dest.Width < 1f || dest.Height < 1f)
+            {
+                return;
+            }
+
+            var previous = graphics.InterpolationMode;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            GraphicsState clip = graphics.Save();
+            graphics.SetClip(viewport);
+            graphics.DrawImage(frame, dest);
+            graphics.Restore(clip);
+            using (var dim = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+            {
+                graphics.FillRectangle(dim, viewport);
+            }
+            graphics.InterpolationMode = previous;
+        }
+
+        private static RectangleF Cover(Rectangle bounds, int pixelWidth, int pixelHeight)
+        {
+            if (pixelWidth <= 0 || pixelHeight <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return RectangleF.Empty;
+            }
+
+            float scale = Math.Max(
+                (float)bounds.Width / pixelWidth,
+                (float)bounds.Height / pixelHeight);
+            float width = pixelWidth * scale;
+            float height = pixelHeight * scale;
+            return new RectangleF(
+                bounds.X + ((bounds.Width - width) / 2f),
+                bounds.Y + ((bounds.Height - height) / 2f),
+                width,
+                height);
         }
 
         private void RebuildProjection()
@@ -297,11 +582,21 @@ namespace DJMaxEditor.Preview
         private void ChartTopologyChanged(object sender, EventArgs e)
         {
             RebuildProjection();
+            if (_document != null)
+            {
+                ReloadBgaClock(_document.Model);
+                SyncBga();
+            }
         }
 
         private void DocumentUndoRedo(object sender, UndoManager.Action action)
         {
             RebuildProjection();
+            if (_document != null)
+            {
+                ReloadBgaClock(_document.Model);
+                SyncBga();
+            }
         }
 
         private void DrawEmptyState(Graphics graphics, Rectangle viewport)

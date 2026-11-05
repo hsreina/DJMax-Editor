@@ -59,7 +59,9 @@ namespace DJMaxEditor.DJMax
             TriggerStatusChange();
         }
 
-        // Play from tick
+        // Play from tick (keysound check / play-from-spot). Events strictly before
+        // the target are applied silently - tempo and volume catch up, notes do not
+        // fire - so seeking mid-chart does not dump every keysound up to that point.
         public void Play(int tick)
         {
             if (false == IsReady)
@@ -69,17 +71,13 @@ namespace DJMaxEditor.DJMax
 
             m_timer.Reset();
             ResetMsTime();
-            if (tick != 0)
-            {
-                m_curTick = tick;
-                UpdateTimer();
-                UpdateAutoPlayEvents();
-            }
-            else
-            {
-                m_curTick = 0;
-                m_curMsTime = 0L;
-            }
+
+            m_curEventIdx = 0;
+            m_curTick = Math.Max(0, tick);
+            m_curTempo = m_playerData?.Tempo ?? 120.0f;
+            SetTempo(m_curTempo);
+            // Integrates wall-clock ms across tempo changes while skipping notes.
+            m_curMsTime = CatchUpToCurrentTick();
 
             IsPaused = false;
             IsStopped = false;
@@ -241,6 +239,61 @@ namespace DJMaxEditor.DJMax
 
         private void UpdateAutoPlayEvents()
         {
+            DrainEvents(playNotes: true);
+        }
+
+        /// <summary>
+        /// Advances the event cursor up to <see cref="m_curTick"/> without firing notes.
+        /// Returns the integrated song time in ms at the seek point (tempo-aware).
+        /// </summary>
+        private long CatchUpToCurrentTick()
+        {
+            if (m_playerData == null)
+            {
+                Logs.Write("PlayerData is null");
+                return 0;
+            }
+
+            var events = m_playerData.Tracks.Events;
+            double elapsedMs = 0.0;
+            int lastTick = 0;
+
+            while (m_curEventIdx < events.Count())
+            {
+                var scoreEvent = events[(int)m_curEventIdx];
+                if (scoreEvent == null)
+                {
+                    throw new Exception($"ERROR: bad event idx = {m_curEventIdx}");
+                }
+                if (scoreEvent.Tick > m_curTick)
+                {
+                    break;
+                }
+
+                switch (scoreEvent.EventType)
+                {
+                    case EventType.Note:
+                        // Notes are restored by the shell with a sample offset (BGM).
+                        break;
+                    case EventType.Tempo:
+                        elapsedMs += (scoreEvent.Tick - lastTick) * m_period;
+                        lastTick = scoreEvent.Tick;
+                        SetTempo(scoreEvent.Tempo);
+                        break;
+                    case EventType.Volume:
+                        HandlePlayEvent(scoreEvent.TrackId, scoreEvent, 0);
+                        break;
+                }
+
+                m_curEventIdx++;
+            }
+
+            elapsedMs += (m_curTick - lastTick) * m_period;
+            return (long)elapsedMs;
+        }
+
+        private void DrainEvents(bool playNotes)
+        {
             if (m_playerData == null)
             {
                 Logs.Write("PlayerData is null");
@@ -264,8 +317,13 @@ namespace DJMaxEditor.DJMax
                     break;
                 }
 
-                // Then the other events
-                HandlePlayEvent(scoreEvent.TrackId, scoreEvent, m_curTick - scoreEvent.Tick);
+                if (playNotes ||
+                    scoreEvent.EventType == EventType.Tempo ||
+                    scoreEvent.EventType == EventType.Volume)
+                {
+                    HandlePlayEvent(scoreEvent.TrackId, scoreEvent, m_curTick - scoreEvent.Tick);
+                }
+
                 m_curEventIdx++;
             }
         }

@@ -201,7 +201,10 @@ namespace DJMaxEditor.Preview
                 Math.Abs(size - NoteFrameFourLine) < 0.5;
         }
 
-        /// <summary>Letterboxes the 1280x768 arcade frame into the viewport, centred.</summary>
+        /// <summary>
+        /// Letterboxes the playable area (below the 72px title plate) into the viewport.
+        /// The header band is cropped out so the preview has no empty black strip on top.
+        /// </summary>
         public static TechnikaPlayfieldFit Fit(double viewportWidth, double viewportHeight)
         {
             if (viewportWidth <= 0 || viewportHeight <= 0 ||
@@ -210,16 +213,21 @@ namespace DJMaxEditor.Preview
                 return default(TechnikaPlayfieldFit);
             }
 
-            double scale = Math.Min(viewportWidth / NativeWidth, viewportHeight / NativeHeight);
+            double contentHeight = NativeHeight - PlayfieldTop;
+            double scale = Math.Min(viewportWidth / NativeWidth, viewportHeight / contentHeight);
             if (scale <= 0 || double.IsInfinity(scale))
             {
                 return default(TechnikaPlayfieldFit);
             }
 
+            // Shift Y so arcade PlayfieldTop lands at the top of the letterboxed content.
+            double offsetY = ((viewportHeight - (contentHeight * scale)) / 2.0) -
+                (PlayfieldTop * scale);
+
             return new TechnikaPlayfieldFit(
                 scale,
                 (viewportWidth - (NativeWidth * scale)) / 2.0,
-                (viewportHeight - (NativeHeight * scale)) / 2.0);
+                offsetY);
         }
     }
 

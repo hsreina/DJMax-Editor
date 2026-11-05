@@ -18,7 +18,11 @@ namespace DJMaxEditor
 
         // audition: play outside the transport channel group, so a keysound triggered
         // from the audio list stays audible while chart playback is paused.
-        bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offset = 0, bool audition = false);
+        // offsetMilliseconds: start this far into the sample (BGM / long pads on seek).
+        bool PlaySound(uint channelIndex, uint soundIndex, float volume, byte pan, uint offsetMilliseconds = 0, bool audition = false);
+
+        /// <summary>Loaded sample length in milliseconds, or 0 when the slot is empty.</summary>
+        uint GetSoundLengthMilliseconds(uint soundIndex);
 
         object GetDebugInfo();
 
