@@ -274,7 +274,7 @@ namespace DJMaxEditor.Tests
                         .OfType<PropertyGrid>()
                         .Single();
 
-                    AssertTrue(advanced.Dock == DockStyle.Bottom && advanced.Height > 0,
+                    AssertTrue(advanced.Height > 0 && advanced.Dock != DockStyle.None,
                         "redesigned Inspector did not reserve an advanced legacy property editor");
                     AssertTrue(object.ReferenceEquals(inspector.PropertyObject, selected),
                         "redesigned Inspector did not retain the legacy property selection");

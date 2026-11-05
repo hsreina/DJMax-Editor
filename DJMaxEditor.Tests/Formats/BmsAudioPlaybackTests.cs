@@ -12,11 +12,9 @@ namespace DJMaxEditor.Tests
         {
             Test("Bms_AudioPauseFreezesEveryOverlappingLongSample", () =>
             {
-                string fmodDirectory = Path.GetFullPath(Path.Combine(
-                    AppDomain.CurrentDomain.BaseDirectory,
-                    @"..\..\..\..\DJMaxEditor\bin\Release\libs\fmod"));
-                AssertTrue(File.Exists(Path.Combine(fmodDirectory, "fmodex.dll")),
-                    "FMOD test runtime was not built");
+                string fmodDirectory = FindReleaseFmodDirectory();
+                AssertTrue(fmodDirectory != null,
+                    "FMOD test runtime was not built (build the solution in Release)");
                 SetDllDirectory(fmodDirectory);
                 string previousDirectory = Environment.CurrentDirectory;
                 Environment.CurrentDirectory = Path.GetFullPath(Path.Combine(fmodDirectory, @"..\.."));
@@ -75,6 +73,25 @@ namespace DJMaxEditor.Tests
                     File.Delete(wavePath);
                 }
             });
+        }
+
+        // Walks up from the test output until the Release build's fmod folder is found, so
+        // the test does not depend on how many directory levels the output folder is below
+        // the repo root.
+        private static string FindReleaseFmodDirectory()
+        {
+            var directory = new DirectoryInfo(AppDomain.CurrentDomain.BaseDirectory);
+            while (directory != null)
+            {
+                string candidate = Path.Combine(
+                    directory.FullName, "DJMaxEditor", "bin", "Release", "libs", "fmod");
+                if (File.Exists(Path.Combine(candidate, "fmodex.dll")))
+                {
+                    return candidate;
+                }
+                directory = directory.Parent;
+            }
+            return null;
         }
 
         private static FMODEX.Channel GetActiveChannel(AudioPlayerFmodEx audio, int index)

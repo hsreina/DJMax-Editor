@@ -1,4 +1,4 @@
-﻿namespace DJMaxEditor {
+namespace DJMaxEditor {
     sealed partial class EditorControl {
         /// <summary> 
         /// Required designer variable.
@@ -26,9 +26,8 @@
             this.tableLayoutPanel1 = new System.Windows.Forms.TableLayoutPanel();
             this.hScrollBar = new System.Windows.Forms.HScrollBar();
             this.vScrollBar = new System.Windows.Forms.VScrollBar();
-            this.DrawingArea = new System.Windows.Forms.PictureBox();
+            this.DrawingArea = new DJMaxEditor.Controls.Editor.EditorRenderControl();
             this.tableLayoutPanel1.SuspendLayout();
-            ((System.ComponentModel.ISupportInitialize)(this.DrawingArea)).BeginInit();
             this.SuspendLayout();
             // 
             // tableLayoutPanel1
@@ -106,7 +105,6 @@
             this.SizeChanged += new System.EventHandler(this.EditorControl_SizeChanged);
             this.KeyPress += new System.Windows.Forms.KeyPressEventHandler(this.EditorControl_KeyPress);
             this.tableLayoutPanel1.ResumeLayout(false);
-            ((System.ComponentModel.ISupportInitialize)(this.DrawingArea)).EndInit();
             this.ResumeLayout(false);
 
         }
@@ -116,6 +114,6 @@
         private System.Windows.Forms.TableLayoutPanel tableLayoutPanel1;
         private System.Windows.Forms.HScrollBar hScrollBar;
         private System.Windows.Forms.VScrollBar vScrollBar;
-        private System.Windows.Forms.PictureBox DrawingArea;
+        private DJMaxEditor.Controls.Editor.EditorRenderControl DrawingArea;
     }
 }

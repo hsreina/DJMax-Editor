@@ -8,6 +8,8 @@
 /*                                                                                            */
 /* ========================================================================================== */
 
+#pragma warning disable 169 // fields mirror the native FMOD struct layout; consumed via interop marshalling
+
 using System;
 using System.Text;
 using System.Runtime.InteropServices;

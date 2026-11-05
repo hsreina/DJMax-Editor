@@ -34,7 +34,8 @@ namespace DJMaxEditor.Tests
                 AssertTechnikaKind(99, 6, "Unknown");
             });
 
-            Test("TechnikaNoteClassifier_RecognizesSonOfSunSpecialNotes", () =>
+            FixtureTest("TechnikaNoteClassifier_RecognizesSonOfSunSpecialNotes",
+                fixtures, "TECHNIKA 2 Patterns/sonof/sonof_pop_3.pt", () =>
             {
                 string path = Path.Combine(
                     fixtures,
@@ -59,7 +60,8 @@ namespace DJMaxEditor.Tests
                     "Son of Sun attr 12 holds were not recognized");
             });
 
-            Test("TechnikaNoteClassifier_MatchesTutorialReference", () =>
+            FixtureTest("TechnikaNoteClassifier_MatchesTutorialReference",
+                fixtures, "TECHNIKA 2 Patterns/tutorial/tutorial_pop_1.pt", () =>
             {
                 string path = Path.Combine(
                     fixtures,
@@ -86,7 +88,9 @@ namespace DJMaxEditor.Tests
                     "tutorial attr 12 holds were not recognized");
             });
 
-            Test("TechnikaNoteArt_UsesAuthoritativeTechmaniaAssets", () =>
+            FixtureTest("TechnikaNoteArt_UsesAuthoritativeTechmaniaAssets",
+                fixtures,
+                "Techmania MXGG build 2 source/Techmania source/TECHMANIA/Assets/Sprites/Notes/Basic.png", () =>
             {
                 string noteAssets = Path.GetFullPath(Path.Combine(
                     fixtures,
@@ -357,7 +361,8 @@ namespace DJMaxEditor.Tests
                     "33ms playback frame was incorrectly delayed");
             });
 
-            Test("TimelineV2_SonOfSunPlaybackFrameFitsSmooth30HzBudget", () =>
+            FixtureTest("TimelineV2_SonOfSunPlaybackFrameFitsSmooth30HzBudget",
+                fixtures, "TECHNIKA 2 Patterns/sonof/sonof_pop_3.pt", () =>
             {
                 string path = Path.Combine(
                     fixtures,

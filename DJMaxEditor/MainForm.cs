@@ -6,6 +6,8 @@ using System.Windows.Forms;
 using System.IO;
 using WeifenLuo.WinFormsUI.Docking;
 using System.Threading;
+using System.Diagnostics;
+using System.Globalization;
 using DJMaxEditor.Undo.Action;
 using DJMaxEditor.PropertyLayer;
 using DJMaxEditor.Controls.Editor.Renderers.Events;
@@ -22,6 +24,7 @@ using DJMaxEditor.Editor;
 using DJMaxEditor.Editor.Commands;
 using DJMaxEditor.Preview;
 using DJMaxEditor.UI;
+using DJMaxEditor.Video;
 
 namespace DJMaxEditor
 {
@@ -78,6 +81,7 @@ namespace DJMaxEditor
 
             return focused is TextBoxBase ||
                 focused is ComboBox ||
+                focused is StudioDropdown ||
                 focused is NumericUpDown ||
                 focused is DataGridView;
         }
@@ -149,6 +153,7 @@ namespace DJMaxEditor
                     {
                         m_audioList.List.ClearSelection();
                     }
+                    RevealInspectorTab();
                 }
                 else if (_documentContext != null &&
                     selectedItems.All(item => item.EventType == EventType.Volume))
@@ -188,23 +193,65 @@ namespace DJMaxEditor
             // Check the selected note instrument
             SelectInstrumentRow(firstEvent.Instrument);
 
+            if (firstEvent.EventType == EventType.Note)
+            {
+                RevealInspectorTab();
+            }
+        }
+
+        /// <summary>
+        /// Bring the Inspector dock tab to the front without stealing keyboard focus
+        /// from the chart editor (so shortcuts keep working after a note click).
+        /// </summary>
+        private void RevealInspectorTab()
+        {
+            if (m_propertiesForm == null || m_propertiesForm.IsDisposed)
+            {
+                return;
+            }
+
+            if (m_propertiesForm.DockPanel == null)
+            {
+                m_propertiesForm.Show(dockPanel);
+                return;
+            }
+
+            if (m_propertiesForm.IsHidden)
+            {
+                m_propertiesForm.Show(dockPanel);
+            }
+
+            if (m_propertiesForm.Pane != null)
+            {
+                m_propertiesForm.Pane.ActiveContent = m_propertiesForm;
+            }
         }
 
         private void SelectInstrumentRow(InstrumentData instrumentData)
         {
-            if (instrumentData != null)
+            // Highlighting the Sounds row for a note selection must not be treated as the
+            // user picking a new instrument (SelectionChanged would rewrite the note).
+            _suppressAudioListInstrumentApply = true;
+            try
             {
-                var row = m_audioList.List.Rows.Cast<DataGridViewRow>().SingleOrDefault(r => r.DataBoundItem == instrumentData);
-                // If we got something, select and move to this track
-                if (row != null)
+                if (instrumentData != null)
                 {
-                    row.Selected = true;
-                    m_audioList.List.FirstDisplayedScrollingRowIndex = row.Index;
+                    var row = m_audioList.List.Rows.Cast<DataGridViewRow>().SingleOrDefault(r => r.DataBoundItem == instrumentData);
+                    // If we got something, select and move to this track
+                    if (row != null)
+                    {
+                        row.Selected = true;
+                        m_audioList.List.FirstDisplayedScrollingRowIndex = row.Index;
+                    }
+                }
+                else
+                {
+                    m_audioList.List.ClearSelection();
                 }
             }
-            else
+            finally
             {
-                m_audioList.List.ClearSelection();
+                _suppressAudioListInstrumentApply = false;
             }
         }
 
@@ -378,6 +425,7 @@ namespace DJMaxEditor
 
             m_documentRail = new StudioDocumentRail();
             m_statusRail = new StudioStatusRail();
+            m_statusRail.SetPerformance("idle");
             m_documentRail.TimelineV1Requested += delegate { SetTimelineSurface(false); };
             m_documentRail.TimelineV2Requested += delegate { SetTimelineSurface(true); };
             m_documentRail.PreviewRequested += delegate { ShowGameplayPreview(); };
@@ -468,6 +516,12 @@ namespace DJMaxEditor
             StudioTheme.ApplyToForm(m_fmod);
             StudioTheme.ApplyToForm(m_notes);
             StudioTheme.ApplyToForm(m_preview);
+            StudioTheme.ApplyToForm(m_bgaPreview);
+            windowsToolStripMenuItem.DropDownItems.Add(new ToolStripMenuItem(
+                "BGA Preview", Resources.videoStart, delegate { ShowBgaPreview(); }));
+            // Keep FMOD last in Window, after any items appended at runtime.
+            windowsToolStripMenuItem.DropDownItems.Remove(fMODInformationsToolStripMenuItem1);
+            windowsToolStripMenuItem.DropDownItems.Add(fMODInformationsToolStripMenuItem1);
             SetFollowPlayback(m_editorForm.Editor.FollowTracksProgressWhilePlaying);
             SetSplitView(_splitViewEnabled);
             SyncSelectFilterUi();
@@ -583,6 +637,10 @@ namespace DJMaxEditor
                 StudioCommandContext.Global, () => true, () => string.Empty,
                 ShowGameplayPreview));
             m_commands.Register(new StudioCommand(
+                "panel.bga-preview", "Show BGA preview", "Panels", Keys.None,
+                StudioCommandContext.Global, () => true, () => string.Empty,
+                ShowBgaPreview));
+            m_commands.Register(new StudioCommand(
                 "edit.undo", "Undo", "Edit", Keys.Control | Keys.Z,
                 StudioCommandContext.Document, () => _documentContext != null && m_undoManager.CanUndo,
                 () => "There is nothing to undo.", () => undoToolStripMenuItem_Click(this, EventArgs.Empty)));
@@ -660,7 +718,6 @@ namespace DJMaxEditor
                 m_preview = new GameplayPreviewForm();
                 StudioTheme.ApplyToForm(m_preview);
                 m_preview.Bind(_documentContext);
-                ApplyPreviewProfileFromEventTheme();
             }
 
             m_preview.Show(dockPanel);
@@ -669,23 +726,36 @@ namespace DJMaxEditor
             SetStudioStatus("GAMEPLAY PREVIEW  •  VIEW ONLY");
         }
 
-        private void ApplyPreviewProfileFromEventTheme()
+        private void ShowBgaPreview()
         {
-            if (m_preview == null || m_preview.IsDisposed || _documentContext == null)
+            EnsureBgaPreviewForm();
+            BindBgaPreview();
+            m_bgaPreview.Show(dockPanel);
+            m_bgaPreview.Activate();
+            m_bgaPreview.SyncNow();
+            SetStudioStatus("BGA PREVIEW  •  FOLLOWS PLAYHEAD");
+        }
+
+        private void EnsureBgaPreviewForm()
+        {
+            if (m_bgaPreview != null && !m_bgaPreview.IsDisposed)
             {
                 return;
             }
+            m_bgaPreview = new BgaPreviewForm();
+            StudioTheme.ApplyToForm(m_bgaPreview);
+        }
 
-            IEventRenderer theme = m_editorForm.Editor.CurrentEventsTheme;
-            if (theme != null &&
-                string.Equals(theme.GetName(), "Technika", StringComparison.OrdinalIgnoreCase))
-            {
-                m_preview.ConfirmTechnikaProfile();
-            }
-            else
-            {
-                m_preview.UseGenericProfile();
-            }
+        private void BindBgaPreview()
+        {
+            EnsureBgaPreviewForm();
+            m_bgaPreview.Bind(
+                _documentContext,
+                () => m_editorForm != null && m_editorForm.ActiveSurface != null
+                    ? m_editorForm.ActiveSurface.PlayheadVirtualTick
+                    : (_documentContext != null && _documentContext.Model != null
+                        ? _documentContext.Model.VirtualCurrentTick
+                        : 0));
         }
 
         private void ApplyWorkspacePreset(StudioWorkspacePreset preset)
@@ -743,6 +813,7 @@ namespace DJMaxEditor
             HideDockContent(m_debugOutput);
             HideDockContent(m_fmod);
             HideDockContent(m_preview);
+            HideDockContent(m_bgaPreview);
         }
 
         private static void HideDockContent(DockContent content)
@@ -817,19 +888,12 @@ namespace DJMaxEditor
             }
 
             DocumentCapabilities capabilities = _documentContext.Capabilities;
-            string format = GetFormatChipText(capabilities);
             string surface = m_editorForm.IsLegacySurfaceActive
                 ? "TIMELINE V1"
                 : "TIMELINE V2";
-            string capabilityChip = capabilities.CanEdit
-                ? (capabilities.IsRespectV ? "EDITABLE  •  EXPORT" : "EDITABLE")
-                : "READ ONLY";
             m_documentRail.ShowDocument(
                 Path.GetFileName(_documentContext.SourcePath),
-                surface,
-                format,
-                capabilityChip,
-                !capabilities.CanEdit);
+                surface);
             m_documentRail.SetDocumentState(true);
             m_documentRail.SetEditState(
                 m_undoManager.CanUndo,
@@ -841,32 +905,6 @@ namespace DJMaxEditor
                 toolStripDropDownButton1.Text.ToUpperInvariant(),
                 surface + "  •  " + capabilities.StatusLabel);
             UpdateZoomDisplay();
-        }
-
-        private static string GetFormatChipText(DocumentCapabilities capabilities)
-        {
-            if (!capabilities.SourceFormat.HasValue)
-            {
-                return "UNKNOWN";
-            }
-
-            switch (capabilities.SourceFormat.Value)
-            {
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.PtffDecrypted:
-                    return "PTFF";
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.PtffEncryptedTechnika:
-                    return "TECHNIKA PTFF";
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.TrailerRespectV:
-                    return "TECHNIKA Q";
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.CyclonXml:
-                    return "CYCLON XML";
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.BmsClassic:
-                    return "BMS FAMILY";
-                case DJMaxEditor.Files.FormatDetection.ChartFormat.TechmaniaTrack:
-                    return "TECHMANIA";
-                default:
-                    return capabilities.SourceFormat.Value.ToString().ToUpperInvariant();
-            }
         }
 
         private void SetStudioStatus(string message)
@@ -927,6 +965,7 @@ namespace DJMaxEditor
         private StudioCommandPaletteForm m_commandPalette;
         private FindSoundNotesForm m_findNotesForm;
         private GameplayPreviewForm m_preview = new GameplayPreviewForm();
+        private BgaPreviewForm m_bgaPreview = new BgaPreviewForm();
         private TableLayoutPanel m_studioTopHost;
 
         private sealed class ChartDocument
@@ -994,6 +1033,10 @@ namespace DJMaxEditor
 
         private EventData m_selectedEvent = null;
 
+        // When true, Sounds-list SelectionChanged only stops preview audio and must not
+        // rewrite TemplateEvent / selected-note instruments (DataSource rebind, UI sync).
+        private bool _suppressAudioListInstrumentApply;
+
         private bool m_isFullScreen = false;
 
         private FormWindowState _oldState = FormWindowState.Maximized;
@@ -1034,6 +1077,13 @@ namespace DJMaxEditor
         private void AudioList_selectionChanged(object sender, EventArgs e)
         {
             this.m_audioPlayer.StopSound(ReservedChannel);
+
+            // DataSource rebinds (tab switch) and programmatic row highlights also fire
+            // SelectionChanged; those must not rewrite note instruments.
+            if (_suppressAudioListInstrumentApply)
+            {
+                return;
+            }
 
             if (!CanMutateThroughActiveSurface())
             {
@@ -1171,7 +1221,7 @@ namespace DJMaxEditor
             m_loadingForm.Close();
             if (false == success) 
             {
-                MessageBox.Show("Failed to load the file", "Load file error", MessageBoxButtons.OK, MessageBoxIcon.Error); 
+                MessageBox.Show(this, "Failed to load the file", "Load file error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
 
@@ -1241,8 +1291,14 @@ namespace DJMaxEditor
             editor.OnSelectItem += Editor_OnSelectItem;
             editor.OnRequestEvent += Editor_OnRequestEvent;
             editor.OnUndoRedo += UndoManager_OnUndoRedo;
+            editor.PlayheadSeekRequested += Editor_PlayheadSeekRequested;
             editor.SplitViewEnabled = _splitViewEnabled;
             StudioTheme.ApplyToForm(form);
+        }
+
+        private void Editor_PlayheadSeekRequested(object sender, int virtualTick)
+        {
+            SeekPlayheadAndMaybePlay(virtualTick, forcePlay: false);
         }
 
         private EditorForm CreateDocumentForm()
@@ -1292,7 +1348,15 @@ namespace DJMaxEditor
                 m_player.LoadPlayerData(m_emptyPlayerData);
                 m_audioPlayer.SetSoundContext(string.Empty);
                 this.Text = APP_NAME;
-                m_audioList.List.DataSource = null;
+                _suppressAudioListInstrumentApply = true;
+                try
+                {
+                    m_audioList.List.DataSource = null;
+                }
+                finally
+                {
+                    _suppressAudioListInstrumentApply = false;
+                }
                 m_propertiesForm.PropertyObject = null;
                 UpdateStudioRails();
                 return;
@@ -1307,11 +1371,38 @@ namespace DJMaxEditor
                 LoadDocumentSounds(model, document.Context.SourcePath);
                 m_audioPlayer.MarkSoundContextLoaded(soundKey);
             }
-            m_audioList.List.DataSource = model.Instruments;
+            // Rebinding the shared Sounds grid fires SelectionChanged and would otherwise
+            // apply the auto-selected row (usually InsNum 0 / "none") onto any notes that
+            // were still selected in the document being activated.
+            _suppressAudioListInstrumentApply = true;
+            try
+            {
+                m_audioList.List.DataSource = model.Instruments;
+            }
+            finally
+            {
+                _suppressAudioListInstrumentApply = false;
+            }
             m_propertiesForm.Bind(document.Context);
             m_preview.Bind(document.Context);
-            ApplyPreviewProfileFromEventTheme();
+            // The playfield is where a TECHNIKA chart is read - like the reference project,
+            // opening one brings the preview up on its own instead of waiting for a menu.
+            // BGA discovery/attach runs inside GameplayPreview.Bind so the video paints
+            // under the notes instead of opening a separate dock panel.
+            if (m_preview.Profile == GameplayPreviewProfile.Technika &&
+                (!m_preview.Visible || m_preview.IsDisposed))
+            {
+                ShowGameplayPreview();
+            }
+            if (m_bgaPreview != null && !m_bgaPreview.IsDisposed && m_bgaPreview.Visible)
+            {
+                BindBgaPreview();
+            }
             SyncToolButtons(document.Context.Interaction.Tool);
+
+            // Restore inspector + Sounds highlight from this document's persisted selection
+            // before re-applying the Notes template (which reads the current Sounds row).
+            Editor_OnSelectItem(this, document.Context.Selection.Items.ToArray());
 
             // Re-apply the Notes panel template to the newly active editor so Ctrl+click
             // note creation works right after a tab switch and uses the template currently
@@ -1503,6 +1594,13 @@ namespace DJMaxEditor
             var handler = filterIndex > 0 ?
                 _saveHandler.GetHandlerForFilterIndex(filterIndex) :
                 _saveHandler.GetHandlerForExtension(extension);
+            if (handler == null && model != null && model.SourceFormat.HasValue)
+            {
+                // Extensionless charts carry no extension for the lookup above (detection
+                // is content-based): fall back to the detected format so they still save
+                // back to their own path instead of silently doing nothing.
+                handler = GetSaveHandlerForFormat(model.SourceFormat.Value);
+            }
             if (handler == null)
             {
                 return;
@@ -1511,7 +1609,7 @@ namespace DJMaxEditor
             if (handler is BMESaveFile &&
                 BmsonChartSerializer.ShouldUseForClassicBmsOverflow(model))
             {
-                MessageBox.Show(
+                MessageBox.Show(this,
                     "This chart needs " + BmsChartSerializer.CountRequiredKeysounds(model) +
                     " unique keysounds, but classic BMS only has 1,295 usable IDs.\n\n" +
                     "DJMax Editor will save it as BMSON instead. BMSON keeps every keysound and " +
@@ -1534,7 +1632,7 @@ namespace DJMaxEditor
 
             if (model != null && model.IsReadOnly)
             {
-                MessageBox.Show(
+                MessageBox.Show(this,
                     "This chart was opened read-only" +
                     (model.SourceFormat.HasValue ? " (" + model.SourceFormat + ")" : "") +
                     ".\n\nSaving it back is disabled because lossless round-trip and in-game compatibility " +
@@ -1575,7 +1673,7 @@ namespace DJMaxEditor
                     m_loadingForm.Close();
                     if (!ok)
                     {
-                        MessageBox.Show(
+                        MessageBox.Show(this,
                             "The file could not be saved. The target may be unchanged or incomplete; " +
                             "see the local diagnostics log.\n\nLog: " + DJMaxEditor.Diagnostics.DiagnosticLog.LogPath,
                             "Save failed", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -1773,6 +1871,27 @@ namespace DJMaxEditor
             }
         }
 
+        // Save-side counterpart of GetHandlerForFormat: the fallback that lets charts
+        // opened without an extension (or with one no handler claims) save back to their
+        // own path with the serializer their detected format implies.
+        private ISaveFile GetSaveHandlerForFormat(DJMaxEditor.Files.FormatDetection.ChartFormat format)
+        {
+            switch (format)
+            {
+                case DJMaxEditor.Files.FormatDetection.ChartFormat.PtffDecrypted:
+                case DJMaxEditor.Files.FormatDetection.ChartFormat.PtffEncryptedTechnika:
+                    return _saveHandler.GetHandlerForExtension(".pt");
+                case DJMaxEditor.Files.FormatDetection.ChartFormat.TrailerRespectV:
+                    return _saveHandler.GetHandlerForExtension(".bytes");
+                case DJMaxEditor.Files.FormatDetection.ChartFormat.BmsClassic:
+                    return _saveHandler.GetHandlerForExtension(".bms");
+                case DJMaxEditor.Files.FormatDetection.ChartFormat.TechmaniaTrack:
+                    return _saveHandler.GetHandlerForExtension(".tech");
+                default:
+                    return null;
+            }
+        }
+
         private void ShowOnUi(Action action)
         {
             if (InvokeRequired) BeginInvoke(action);
@@ -1855,7 +1974,7 @@ namespace DJMaxEditor
             catch (Exception ex)
             {
                 DJMaxEditor.Diagnostics.DiagnosticLog.Exception("open.read", ex);
-                MessageBox.Show("The file could not be read.\n\n" + ex.Message,
+                MessageBox.Show(this, "The file could not be read.\n\n" + ex.Message,
                     "Load file error", MessageBoxButtons.OK, MessageBoxIcon.Error);
                 return;
             }
@@ -1924,7 +2043,7 @@ namespace DJMaxEditor
         {
             string name = Path.GetFileName(filename);
 
-            var choice = MessageBox.Show(
+            var choice = MessageBox.Show(this,
                 "This is an encrypted Technika/Trilogy chart.\n\n" +
                 "Decrypt it offline and open it? Decryption runs entirely on this machine " +
                 "(no upload, no network request). The original file is not modified.\n\n" +
@@ -1946,7 +2065,7 @@ namespace DJMaxEditor
             catch (Exception ex)
             {
                 DJMaxEditor.Diagnostics.DiagnosticLog.Exception("open.decrypt", ex);
-                MessageBox.Show(
+                MessageBox.Show(this,
                     "The chart could not be decrypted.\n\n" + ex.Message +
                     "\n\nFile: " + name + "\nThe file was not modified.",
                     "Decryption failed", MessageBoxButtons.OK, MessageBoxIcon.Warning);
@@ -1960,7 +2079,7 @@ namespace DJMaxEditor
 
             if (reDetect.Format != DJMaxEditor.Files.FormatDetection.ChartFormat.PtffDecrypted)
             {
-                MessageBox.Show(
+                MessageBox.Show(this,
                     "Decryption did not produce a valid chart (no PTFF/EZTR structure was found). " +
                     "This file may use a different key or format.\n\n" +
                     "File: " + name +
@@ -2024,14 +2143,14 @@ namespace DJMaxEditor
             if (detection.FailureReason != null) message += "\nReason: " + detection.FailureReason;
             if (detection.Offset.HasValue) message += "\nOffset: 0x" + detection.Offset.Value.ToString("X");
 
-            MessageBox.Show(message, title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            MessageBox.Show(this, message, title, MessageBoxButtons.OK, MessageBoxIcon.Warning);
         }
 
         private void ShowChartLoadError(string filename, DJMaxEditor.Files.ChartLoadException ex)
         {
             m_loadingForm.Close();
             string offset = ex.Offset.HasValue ? "\nOffset: 0x" + ex.Offset.Value.ToString("X") : "";
-            MessageBox.Show(
+            MessageBox.Show(this,
                 "The chart could not be read: " + ex.Message +
                 "\n\nFile: " + filename + "\nError type: " + ex.Kind + offset +
                 "\n\nThe file was not modified.",
@@ -2041,7 +2160,7 @@ namespace DJMaxEditor
         private void ShowUnexpectedLoadError(string filename, Exception ex)
         {
             m_loadingForm.Close();
-            MessageBox.Show(
+            MessageBox.Show(this,
                 "An unexpected error occurred while loading the chart. It was logged locally.\n\n" +
                 ex.Message + "\n\nFile: " + filename + "\nLog: " + DJMaxEditor.Diagnostics.DiagnosticLog.LogPath,
                 "Load file error", MessageBoxButtons.OK, MessageBoxIcon.Error);
@@ -2105,6 +2224,9 @@ namespace DJMaxEditor
 
         private void OnExternalOpen(string[] paths)
         {
+            // Bring the editor up before any dialog is shown: the settings dialog and the
+            // loading form are modal, and a background process cannot pop them to the front.
+            ForceForeground();
             if (paths != null)
             {
                 foreach (var path in paths)
@@ -2116,7 +2238,6 @@ namespace DJMaxEditor
                     OpenFile(path);
                 }
             }
-            ForceForeground();
         }
 
         private void ForceForeground()
@@ -2228,28 +2349,38 @@ namespace DJMaxEditor
 
         private void toolStripButton1_Click(object sender, EventArgs e)
         {
-            if (m_player.IsStopped)
+            if (!m_player.IsReady)
             {
-                // enable the timer
-                //RenderTimer.Enabled = true;
-                //UpdateTimer.Enabled = true;
-                // then play on tick 0
-                m_player.Play(0);
+                return;
+            }
+
+            // Stopped or paused: start from the parked playhead so keysound checks can
+            // begin mid-chart (click empty timeline to move it). Playing: pause.
+            if (m_player.IsStopped || m_player.IsPaused)
+            {
+                int tick = GetPlayheadNativeTick();
+                m_audioPlayer.StopAllSounds();
+                m_player.Play(tick);
+                RestoreSoundingVoices(tick);
+                SyncPreviewToPlayhead();
             }
             else
             {
-
-                if (m_isPaused)
-                {
-                    m_audioPlayer.PauseAllSounds();
-                    m_player.Resume();
-                }
-                else
-                {
-                    m_player.Pause();
-                    m_audioPlayer.PauseAllSounds();
-                }
+                m_player.Pause();
+                m_audioPlayer.PauseAllSounds();
             }
+        }
+
+        /// <summary>Native sequencer tick under the playhead (virtual / VirtualTickSize).</summary>
+        private int GetPlayheadNativeTick()
+        {
+            if (m_editorForm == null || m_editorForm.ActiveSurface == null)
+            {
+                return 0;
+            }
+            int virtualTick = m_editorForm.ActiveSurface.PlayheadVirtualTick;
+            int tick = virtualTick / EventData.VirtualTickSize;
+            return tick < 0 ? 0 : tick;
         }
 
         private void toolStripButton2_Click(object sender, EventArgs e)
@@ -2282,7 +2413,7 @@ namespace DJMaxEditor
         {
             openFileDialog1.Filter = _loadHandler.GetFilter();
             openFileDialog1.Multiselect = true;
-            DialogResult result = openFileDialog1.ShowDialog();
+            DialogResult result = openFileDialog1.ShowDialog(this);
             if (result == DialogResult.OK)
             {
                 foreach (string name in openFileDialog1.FileNames)
@@ -2353,6 +2484,12 @@ namespace DJMaxEditor
             else if (persistString == typeof(Panels.NoteSelectForm).ToString())
                 return m_notes;
 
+            else if (persistString == typeof(BgaPreviewForm).ToString())
+            {
+                EnsureBgaPreviewForm();
+                return m_bgaPreview;
+            }
+
 
 #if ENABLE_EVENT_FORM
             else if (persistString == typeof(Panels.EventsListForm).ToString())
@@ -2380,7 +2517,34 @@ namespace DJMaxEditor
             saveFileDialog1.Filter = _saveHandler.GetFilter();
             saveFileDialog1.DefaultExt = _saveHandler.GetDefaultExtension();
 
-            if (saveFileDialog1.ShowDialog() != DialogResult.OK)
+            // Default to the active document's own folder and name: the dialog is a
+            // shared instance, so without this it would reopen wherever (and as
+            // whatever) a previously saved document left it.
+            string sourcePath = _activeDocument != null
+                ? _activeDocument.Context.SourcePath
+                : null;
+            if (!string.IsNullOrEmpty(sourcePath))
+            {
+                try
+                {
+                    saveFileDialog1.InitialDirectory =
+                        Path.GetDirectoryName(Path.GetFullPath(sourcePath));
+                    saveFileDialog1.FileName = Path.GetFileName(sourcePath);
+                }
+                catch (ArgumentException)
+                {
+                    // A malformed stored path must not break Save As altogether.
+                }
+                catch (PathTooLongException)
+                {
+                }
+            }
+            else
+            {
+                saveFileDialog1.FileName = string.Empty;
+            }
+
+            if (saveFileDialog1.ShowDialog(this) != DialogResult.OK)
             {
                 return;
             }
@@ -2594,7 +2758,7 @@ namespace DJMaxEditor
             }
 
             this.m_audioPlayer.StopSound(ReservedChannel);
-            this.m_audioPlayer.PlaySound(ReservedChannel, selection.InsNum, 1, 64);
+            this.m_audioPlayer.PlaySound(ReservedChannel, selection.InsNum, 1, 64, audition: true);
         }
 
         private void AudioList_onStopPressed(object sender)
@@ -2680,7 +2844,6 @@ namespace DJMaxEditor
             }
             ThemeDropDownButton.Text = "Events theme  " + theme.GetName();
             m_notes.ApplyTheme(theme);
-            ApplyPreviewProfileFromEventTheme();
         }
 
         // .pt (PTFF), .bytes (Technika Q trailer) and .tech (TECHMANIA) charts all speak the
@@ -2890,6 +3053,24 @@ namespace DJMaxEditor
 
         private int m_lastPlaybackVirtualTick = -1;
 
+        private readonly Stopwatch m_playbackPumpClock = Stopwatch.StartNew();
+
+        private double m_lastPlaybackFrameMilliseconds = -1;
+
+        private bool m_playbackPumpWasPlaying;
+
+        private string m_lastPerformanceText;
+
+        /// <summary>
+        /// The playback pump, on an 8 ms timer so it runs faster than any display. The
+        /// sequencer's whole-tick rate is tempo * 48 ticks a second - 48/s at 60 BPM, below
+        /// a 60 Hz display - so driving the playhead off the integer tick alone steps at
+        /// best every other frame at low tempos. <see cref="Player.GetCurrentTickExact"/>
+        /// adds the sub-tick remainder and gives a fresh position six times as often (288
+        /// virtual ticks/s at 60 BPM), which is what keeps the playhead line, the follow
+        /// scroll and the preview sweeping smoothly; Invalidate coalesces in WM_PAINT to
+        /// the display's own rate, which is the WinForms frame cap.
+        /// </summary>
         private void PlayerTimer_Tick(object sender, EventArgs e)
         {
             var tm = TimeSpan.FromMilliseconds(m_player.GetCurrentMsTime());
@@ -2901,34 +3082,292 @@ namespace DJMaxEditor
                 currentProgress.Text = progressText;
             }
 
-            if (m_player.IsReady)
+            if (!m_player.IsReady)
             {
-                m_playerData.CurrentTick = tick;
-                int virtualTick = m_playerData.VirtualCurrentTick;
-                if (virtualTick != m_lastPlaybackVirtualTick)
-                {
-                    // Invalidate only when the playhead actually advanced; the
-                    // 8 ms timer then costs nothing on ticks it outruns.
-                    m_lastPlaybackVirtualTick = virtualTick;
-                    m_editorForm.ActiveSurface.PlayheadVirtualTick = virtualTick;
-                }
-                m_preview.RefreshPlayback();
+                return;
             }
+
+            bool playing = m_player.IsPlaying;
+            if (playing && !m_playbackPumpWasPlaying)
+            {
+                // (Re)start: drop the stale frame-time baseline so the first reading is honest.
+                m_lastPlaybackFrameMilliseconds = -1;
+                m_lastPlaybackVirtualTick = -1;
+            }
+            m_playbackPumpWasPlaying = playing;
+            if (!playing)
+            {
+                return;
+            }
+
+            double exactTick = m_player.GetCurrentTickExact();
+            int virtualTick = (int)(exactTick * EventData.VirtualTickSize);
+
+            if (virtualTick != m_lastPlaybackVirtualTick)
+            {
+                // The integer position still drives the document model and the preview
+                // frame; the smooth position below drives the paint pass.
+                m_lastPlaybackVirtualTick = virtualTick;
+                m_playerData.CurrentTick = virtualTick / EventData.VirtualTickSize;
+                m_editorForm.ActiveSurface.PlayheadVirtualTick = virtualTick;
+                m_preview.RefreshPlayback();
+                if (m_bgaPreview != null && !m_bgaPreview.IsDisposed)
+                {
+                    m_bgaPreview.RefreshPlayback();
+                }
+            }
+
+            m_editorForm.ActiveSurface.PlayheadPositionVirtualTick =
+                exactTick * EventData.VirtualTickSize;
+
+            // One ms / fps entry per painted frame, the same contract as the reference
+            // project's perf readout: the delta is measured between real paint passes
+            // of the timeline surface (the WinForms analogue of the WPF composition
+            // clock), not between this pump's own ticks. The last value stays on the
+            // rail when playback stops.
+            double now = m_playbackPumpClock.Elapsed.TotalMilliseconds;
+            double frameDelta = 0;
+            if (m_editorForm.IsLegacySurfaceActive)
+            {
+                var editor = m_editorForm.Editor;
+                // Only a fresh paint counts - right after pressing play the most recent
+                // paint can be an idle one from long before playback started.
+                if (editor.DebugClockNowMs - editor.DebugLastPaintAtMs < 100)
+                {
+                    frameDelta = editor.DebugLastPaintDeltaMs;
+                }
+            }
+            else
+            {
+                frameDelta = m_lastPlaybackFrameMilliseconds > 0
+                    ? now - m_lastPlaybackFrameMilliseconds
+                    : 0;
+            }
+            if (frameDelta > 0 && m_statusRail != null)
+            {
+                string performanceText = string.Format(
+                    CultureInfo.InvariantCulture,
+                    "{0:0.0} ms  {1:0} fps",
+                    frameDelta,
+                    1000.0 / frameDelta);
+                if (performanceText != m_lastPerformanceText)
+                {
+                    m_lastPerformanceText = performanceText;
+                    m_statusRail.SetPerformance(performanceText);
+                }
+            }
+            m_lastPlaybackFrameMilliseconds = now;
         }
 
         private void currentProgress_Click(object sender, EventArgs e)
         {
-            PlayTickDialog t = new PlayTickDialog(m_player.GetCurrentTick());
+            PlayTickDialog t = new PlayTickDialog(GetPlayheadNativeTick());
             var closeDialogSuccess = t.ShowDialog(this) == DialogResult.OK;
             if (!closeDialogSuccess)
             {
                 return;
             }
             int target = int.Parse(t.SetTick);
+            SeekPlayheadAndMaybePlay(target * EventData.VirtualTickSize, forcePlay: true);
+        }
 
-            m_audioPlayer.StopAllSounds();
-            m_player.Reset();
-            m_player.Play(target);
+        /// <summary>
+        /// Parks the playhead at <paramref name="virtualTick"/>. When already running
+        /// (or <paramref name="forcePlay"/>), restarts playback from that spot so KEY
+        /// sound calibration can jump around the chart without returning to tick 0.
+        /// Always pushes the BGA/preview to the same tick - the playback pump alone
+        /// would leave the video stranded until the next timer tick (or forever while
+        /// stopped).
+        /// </summary>
+        private void SeekPlayheadAndMaybePlay(int virtualTick, bool forcePlay)
+        {
+            virtualTick = Math.Max(0, virtualTick);
+            if (m_editorForm != null && m_editorForm.ActiveSurface != null)
+            {
+                m_editorForm.ActiveSurface.PlayheadVirtualTick = virtualTick;
+                m_editorForm.ActiveSurface.PlayheadPositionVirtualTick = virtualTick;
+            }
+            if (_documentContext != null && _documentContext.Model != null)
+            {
+                _documentContext.Model.CurrentTick = virtualTick / EventData.VirtualTickSize;
+            }
+
+            int nativeTick = virtualTick / EventData.VirtualTickSize;
+            currentProgress.Text = "00:00:00  |  TICK " + nativeTick;
+            // Force the next pump to treat this as a fresh position.
+            m_lastPlaybackVirtualTick = -1;
+
+            if (m_player.IsReady)
+            {
+                bool restart = forcePlay || m_player.IsPlaying || m_player.IsPaused;
+                if (restart)
+                {
+                    m_audioPlayer.StopAllSounds();
+                    m_player.Play(nativeTick);
+                    RestoreSoundingVoices(nativeTick);
+                }
+                else if (m_editorForm != null && m_editorForm.ActiveSurface != null)
+                {
+                    m_editorForm.ActiveSurface.InvalidateView();
+                }
+            }
+
+            SyncPreviewToPlayhead();
+        }
+
+        /// <summary>
+        /// Seeks Gameplay Preview BGA and the standalone BGA Preview to the parked
+        /// playhead immediately (scrub while stopped, or mid-chart play start).
+        /// </summary>
+        private void SyncPreviewToPlayhead()
+        {
+            if (m_preview != null && !m_preview.IsDisposed)
+            {
+                m_preview.RefreshPlaybackImmediately();
+            }
+            if (m_bgaPreview != null && !m_bgaPreview.IsDisposed)
+            {
+                m_bgaPreview.SyncNow();
+            }
+        }
+
+        /// <summary>
+        /// Re-strikes whatever each track would still be sounding at
+        /// <paramref name="nativeTick"/>, mid-sample. The sequencer skips past notes
+        /// on seek; without this the BGM (often a short-duration note carrying a long
+        /// ogg) restarts silent or from 0:00.
+        /// </summary>
+        private void RestoreSoundingVoices(int nativeTick)
+        {
+            if (nativeTick <= 0 || m_playerData == null || m_audioPlayer == null)
+            {
+                return;
+            }
+
+            foreach (TrackData track in m_playerData.Tracks)
+            {
+                if (track == null)
+                {
+                    continue;
+                }
+
+                EventData sounding = null;
+                foreach (EventData ev in track.Events)
+                {
+                    if (ev == null || ev.EventType != EventType.Note)
+                    {
+                        continue;
+                    }
+                    if (ev.Tick > nativeTick)
+                    {
+                        break;
+                    }
+                    if (ev.Instrument == null || ev.Instrument.InsNum == 0)
+                    {
+                        continue;
+                    }
+                    sounding = ev;
+                }
+
+                if (sounding == null)
+                {
+                    continue;
+                }
+
+                double elapsedMs = ElapsedMillisecondsBetween(
+                    sounding.Tick, nativeTick, m_playerData);
+                if (elapsedMs < 0)
+                {
+                    continue;
+                }
+
+                uint lengthMs = m_audioPlayer.GetSoundLengthMilliseconds(sounding.Instrument.InsNum);
+                if (lengthMs == 0 || elapsedMs >= lengthMs)
+                {
+                    continue;
+                }
+
+                m_audioPlayer.SetVolume(track.Idx, sounding.Vel);
+                if (!m_audioPlayer.PlaySound(
+                        track.Idx,
+                        sounding.Instrument.InsNum,
+                        track.Volume,
+                        sounding.Pan,
+                        (uint)elapsedMs))
+                {
+                    Logs.Write(
+                        "Failed to restore sounding voice on track : {0}, soundIndex : {1}",
+                        track.Idx,
+                        sounding.Instrument.InsNum);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Wall-clock ms from <paramref name="fromTick"/> to <paramref name="toTick"/>,
+        /// integrating the chart tempo map the same way the sequencer does
+        /// (48 ticks per beat).
+        /// </summary>
+        private static double ElapsedMillisecondsBetween(int fromTick, int toTick, PlayerData model)
+        {
+            if (model == null || toTick <= fromTick)
+            {
+                return 0.0;
+            }
+
+            double period = PeriodForTempo(model.Tempo);
+            EventData[] timeline = model.Tracks != null ? model.Tracks.Events : null;
+            if (timeline != null)
+            {
+                for (int i = 0; i < timeline.Length; i++)
+                {
+                    EventData ev = timeline[i];
+                    if (ev == null || ev.EventType != EventType.Tempo || ev.Tick > fromTick)
+                    {
+                        continue;
+                    }
+                    if (ev.Tempo > 0)
+                    {
+                        period = PeriodForTempo(ev.Tempo);
+                    }
+                }
+            }
+
+            double ms = 0.0;
+            int cursor = fromTick;
+            if (timeline != null)
+            {
+                for (int i = 0; i < timeline.Length; i++)
+                {
+                    EventData ev = timeline[i];
+                    if (ev == null || ev.EventType != EventType.Tempo)
+                    {
+                        continue;
+                    }
+                    if (ev.Tick <= fromTick || ev.Tick >= toTick)
+                    {
+                        continue;
+                    }
+                    ms += (ev.Tick - cursor) * period;
+                    cursor = ev.Tick;
+                    if (ev.Tempo > 0)
+                    {
+                        period = PeriodForTempo(ev.Tempo);
+                    }
+                }
+            }
+
+            ms += (toTick - cursor) * period;
+            return ms;
+        }
+
+        private static double PeriodForTempo(float tempo)
+        {
+            if (tempo <= 0)
+            {
+                tempo = 120.0f;
+            }
+            return 60000.0 / (tempo * 48.0);
         }
     }
 }

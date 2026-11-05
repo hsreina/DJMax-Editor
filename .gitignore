@@ -8,6 +8,7 @@ tools
 /info.txt
 /video-128.png
 /DJMaxEditor/Resources/*.psd
+/DJMaxEditor/LocalAssets/
 Thumbs.db
 /DJMaxEditor/libs/NVorbis
 /.vs/DJMaxEditor/v14/*.suo

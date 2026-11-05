@@ -1,4 +1,4 @@
-
+using System;
 using System.ComponentModel;
 
 namespace DJMaxEditor.DJMax
@@ -36,10 +36,15 @@ namespace DJMaxEditor.DJMax
 
         private uint m_headerEndTick;
 
+        /// <summary>
+        /// Authored chart end. Takes the max of: file header end tick, last event start across
+        /// all tracks, and <see cref="TrackDuration"/> converted at the Player's 48-ticks-per-beat
+        /// rate — so an audio tail past the last note still plays.
+        /// </summary>
         public uint HeaderEndTick {
             get
             {
-                return (uint)MaxTick;
+                return (uint)Math.Max(0, ResolveEndTick());
             }
             set
             {
@@ -66,9 +71,19 @@ namespace DJMaxEditor.DJMax
             private set;
         }
 
-        public int VirtualMaxTick => Tracks.MaxTick * EventData.VirtualTickSize;
+        public int VirtualMaxTick => MaxTick * EventData.VirtualTickSize;
 
         public int VirtualCurrentTick { get; private set; } = 0;
+
+        /// <summary>
+        /// Playhead position at sub-tick precision, in virtual ticks. The whole-tick
+        /// <see cref="VirtualCurrentTick"/> advances at tempo * 48 ticks a second, below a
+        /// display's refresh rate at low tempos; whoever drives playback each frame (the
+        /// hosted benchmark harness writes it directly; MainForm feeds
+        /// IEditorSurface.PlayheadPositionVirtualTick from Player.GetCurrentTickExact)
+        /// keeps the sub-tick remainder here so smooth playhead surfaces can read it back.
+        /// </summary>
+        public double SmoothVirtualCurrentTick { get; set; }
 
         public int CurrentTick
         {
@@ -76,7 +91,8 @@ namespace DJMaxEditor.DJMax
             set => VirtualCurrentTick = value * EventData.VirtualTickSize;
         }
 
-        public int MaxTick => Tracks.MaxTick;
+        /// <summary>Playback and canvas end — same as <see cref="HeaderEndTick"/>.</summary>
+        public int MaxTick => ResolveEndTick();
 
         public PlayerData()
         {
@@ -110,6 +126,9 @@ namespace DJMaxEditor.DJMax
 
         public void Clear()
         {
+            // Instruments/tracks only — PT/Trailer loaders set HeaderEndTick and TrackDuration
+            // before Clear(), then refill events. Wiping the header here dropped the authored
+            // song end and stopped playback at the last note.
             Instruments.Clear();
             Tracks.Clear();
         }
@@ -117,6 +136,47 @@ namespace DJMaxEditor.DJMax
         #endregion // public defs
 
         #region private defs
+
+        /// <summary>
+        /// Effective document end: file header, last event on any track, and audio length from
+        /// <see cref="TrackDuration"/>.
+        /// </summary>
+        private int ResolveEndTick()
+        {
+            int end = Tracks != null ? Math.Max(0, Tracks.MaxTick) : 0;
+
+            if (m_headerEndTick > (uint)end)
+            {
+                end = (int)m_headerEndTick;
+            }
+
+            int fromDuration = EndTickFromTrackDuration();
+            if (fromDuration > end)
+            {
+                end = fromDuration;
+            }
+
+            return end;
+        }
+
+        /// <summary>
+        /// <see cref="TrackDuration"/> (seconds) → ticks at the Player clock (48 ticks/beat).
+        /// </summary>
+        private int EndTickFromTrackDuration()
+        {
+            if (TrackDuration <= 0f || Tempo <= 0f)
+            {
+                return 0;
+            }
+
+            double ticks = TrackDuration * (double)Tempo / 60.0 * 48.0;
+            if (double.IsNaN(ticks) || double.IsInfinity(ticks) || ticks <= 0.0)
+            {
+                return 0;
+            }
+
+            return (int)Math.Ceiling(ticks);
+        }
 
         #endregion // private defs
     }

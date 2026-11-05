@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -103,7 +103,7 @@ namespace DJMaxEditor
             return (ushort)(_array[_pos - 2 + _origin] | _array[_pos - 1 + _origin] << 8);
         }
 
-        public byte ReadByte() 
+        public new byte ReadByte() 
         {
             return _array[_origin + _pos++];
         }
@@ -161,7 +161,7 @@ namespace DJMaxEditor
             Write(data, 0, data.Length);
         }
 
-        public void WriteByte(byte b) 
+        public override void WriteByte(byte b) 
         {
             Write(new byte[1] { b }, 0, 1);
         }

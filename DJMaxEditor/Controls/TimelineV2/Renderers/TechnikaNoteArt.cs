@@ -94,6 +94,66 @@ namespace DJMaxEditor.Controls.TimelineV2.Renderers
             return true;
         }
 
+        /// <summary>
+        /// The playfield variant: the head is centred on a floating point, scaled to the
+        /// arcade frame size rather than a row height, may be semi-transparent (a note in
+        /// the next scan reads at 60%), and a chain head turns to point at the member it
+        /// joins. Falls back to false when no art exists, exactly like <see cref="TryDraw"/>.
+        /// </summary>
+        internal static bool TryDrawPlayfieldHead(
+            Graphics graphics,
+            TechnikaNoteKind kind,
+            double centerX,
+            double centerY,
+            double size,
+            double opacity,
+            double angleDegrees)
+        {
+            if (ImageFor(kind) == null || size < 4.0)
+            {
+                return false;
+            }
+
+            Image image = ScaledImageFor(kind, Math.Max(4, (int)Math.Round(size)));
+            var state = graphics.Save();
+            try
+            {
+                graphics.TranslateTransform((float)centerX, (float)centerY);
+                if (Math.Abs(angleDegrees) > 0.01)
+                {
+                    graphics.RotateTransform((float)angleDegrees);
+                }
+                var destination = new RectangleF(
+                    (float)(-size / 2.0), (float)(-size / 2.0),
+                    (float)size, (float)size);
+                opacity = Math.Max(0.0, Math.Min(1.0, opacity));
+                if (opacity >= 0.999)
+                {
+                    graphics.DrawImage(image, destination);
+                }
+                else
+                {
+                    using (var attributes = new ImageAttributes())
+                    {
+                        var matrix = new ColorMatrix { Matrix33 = (float)opacity };
+                        attributes.SetColorMatrix(matrix, ColorMatrixFlag.Default, ColorAdjustType.Bitmap);
+                        graphics.DrawImage(
+                            image,
+                            Rectangle.Round(destination),
+                            0f, 0f, (float)image.Width, (float)image.Height,
+                            GraphicsUnit.Pixel,
+                            attributes);
+                    }
+                }
+            }
+            finally
+            {
+                graphics.Restore(state);
+            }
+
+            return true;
+        }
+
         private static Image ScaledImageFor(TechnikaNoteKind kind, int size)
         {
             int key = (AssetIdFor(kind) * 64) + size;

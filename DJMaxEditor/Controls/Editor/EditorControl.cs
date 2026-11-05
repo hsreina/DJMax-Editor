@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Drawing;
 using System.Windows.Forms;
@@ -24,6 +25,13 @@ namespace DJMaxEditor
         public event EventRequestHandler OnRequestEvent;
 
         public event EventHandler ViewSettingsChanged;
+
+        /// <summary>
+        /// Raised when the owner parks the playhead by clicking empty timeline space.
+        /// Argument is the snapped virtual tick. MainForm restarts playback from that
+        /// spot when the transport is already running.
+        /// </summary>
+        public event EventHandler<int> PlayheadSeekRequested;
 
         public UndoManager UndoManager = UndoManager.GetInstance();
 
@@ -57,6 +65,186 @@ namespace DJMaxEditor
                 RaiseViewSettingsChanged();
             }
         }
+
+        /// <summary>
+        /// The playhead position at sub-tick precision, in virtual ticks. The playback
+        /// pump feeds this every frame; the whole-tick sequencer position alone moves at
+        /// tempo * 48 ticks a second, below the display's refresh rate at low tempos, and
+        /// this is what keeps the playhead line and the follow scroll moving smoothly.
+        /// </summary>
+        public double PlayheadPositionVirtualTick
+        {
+            get { return _smoothVirtualTick; }
+        }
+
+        /// <summary>Moves the smooth playhead and repaints; called by the playback pump.</summary>
+        public void SetPlayheadPosition(double virtualTick)
+        {
+            _smoothVirtualTick = Math.Max(0.0, virtualTick);
+            RepaintPlayheadStrip();
+        }
+
+        /// <summary>
+        /// Invalidates just the strip of client area the playhead line occupies -
+        /// the union of its previous and new position - when the scene behind it
+        /// is static (playback without follow-scroll). The reference project's
+        /// pump re-records only its overlay layer per frame; this is the GDI+
+        /// equivalent, and it is what keeps playback painting cheap. While
+        /// follow-scroll is active the origin moves every frame, so the whole
+        /// surface repaints as before.
+        /// </summary>
+        private void RepaintPlayheadStrip()
+        {
+            const float pad = 6f;
+
+            if (IsFollowing || !_ready)
+            {
+                if (PlaybackPaintGateOpen())
+                {
+                    InvalidatePlayheadStripFull();
+                }
+                else
+                {
+                    RememberPlayheadStrip(_viewablePixels.X, _zoom);
+                }
+                return;
+            }
+
+            float zoom = _zoom;
+            int originX = _viewablePixels.X;
+
+            if (!_playheadStripValid ||
+                _playheadStripOriginX != originX ||
+                Math.Abs(_playheadStripZoom - zoom) > 0.0001f)
+            {
+                if (PlaybackPaintGateOpen())
+                {
+                    InvalidatePlayheadStripFull();
+                }
+                else
+                {
+                    RememberPlayheadStrip(originX, zoom);
+                }
+                return;
+            }
+
+            if (!PlaybackPaintGateOpen())
+            {
+                // Gated: no new paint this tick, but the position moved - keep the
+                // tracked strip origin in step so the next allowed paint erases the
+                // line where it actually was.
+                RememberPlayheadStrip(originX, zoom);
+                return;
+            }
+
+            float width = _progress.Width * zoom;
+            float oldX = (float)(_playheadStripLastVirtualX - _progress.Width / 2.0 - originX) * zoom;
+            float newX = (float)(_smoothVirtualTick - _progress.Width / 2.0 - originX) * zoom;
+            float left = Math.Min(oldX, newX) - pad;
+            float right = Math.Max(oldX, newX) + width + pad;
+
+            var strip = new Rectangle(
+                (int)Math.Floor(left),
+                0,
+                (int)Math.Ceiling(right - left),
+                DrawingArea.Height);
+            DrawingArea.Invalidate(strip);
+
+            RememberPlayheadStrip(originX, zoom);
+        }
+
+        /// <summary>
+        /// During playback, painting faster than the display presents only burns
+        /// UI-thread time on extra full scene rasterizations; the reference project
+        /// redraws at the composition (display) rate instead. Allows one repaint per
+        /// display interval - measured from the last real paint - and drops the rest.
+        /// The dropped ticks lose nothing: a paint always reads the latest playhead
+        /// position, so the line still lands exactly where the next allowed paint
+        /// puts it. Editing and scrubbing are never gated.
+        /// </summary>
+        private bool PlaybackPaintGateOpen()
+        {
+            if (!IsPlayerPlaying)
+            {
+                return true;
+            }
+            if (_playbackPaintIntervalMs <= 0)
+            {
+                int hz = DisplayRefreshRate.GetFor(DrawingArea);
+                _playbackPaintIntervalMs = 1000.0 / Math.Max(30, hz);
+            }
+            double nowMs = _debugClock.Elapsed.TotalMilliseconds;
+            if (DebugLastPaintAtMs > 0 &&
+                nowMs - DebugLastPaintAtMs < _playbackPaintIntervalMs * 0.9)
+            {
+                return false;
+            }
+            return true;
+        }
+
+        private double _playbackPaintIntervalMs;
+
+        private void InvalidatePlayheadStripFull()
+        {
+            Redraw();
+            RememberPlayheadStrip(_viewablePixels.X, _zoom);
+        }
+
+        private void RememberPlayheadStrip(int originX, float zoom)
+        {
+            _playheadStripLastVirtualX = _smoothVirtualTick;
+            _playheadStripOriginX = originX;
+            _playheadStripZoom = zoom;
+            _playheadStripValid = true;
+        }
+
+        private bool _playheadStripValid;
+
+        private double _playheadStripLastVirtualX;
+
+        private int _playheadStripOriginX;
+
+        private float _playheadStripZoom;
+
+        // Paint diagnostics for the hosted benchmark: a shared monotonic clock so the
+        // harness can ask "how long since the last paint" in the same timebase.
+        public int DebugPaintCount { get; private set; }
+
+        public double DebugPaintMilliseconds { get; private set; }
+
+        public double DebugLastPaintAtMs { get; private set; }
+
+        /// <summary>
+        /// Milliseconds between the two most recent paint passes - the real
+        /// displayed frame time, which is what the status rail's "ms / fps"
+        /// readout shows (the playback pump's own tick cadence is not).
+        /// </summary>
+        public double DebugLastPaintDeltaMs { get; private set; }
+
+        public double DebugClockNowMs
+        {
+            get { return _debugClock.Elapsed.TotalMilliseconds; }
+        }
+
+        /// <summary>Where the last paint's time went - the hosted benchmark prints
+        /// these next to paintMs.</summary>
+        public double DebugEventsMs => _diagEventsMs;
+
+        public double DebugFillMs => TracksRenderer.DebugFillMs;
+
+        public double DebugChromeMs => TracksRenderer.DebugChromeMs;
+
+        public double DebugScrollMs => _diagScrollMs;
+
+        public int DebugNoteDraws => TracksRenderer.DebugNoteDraws;
+
+        public double DebugPanesMs => _diagPanesMs;
+
+        public double DebugProgressMs => _diagProgressMs;
+
+        public double DebugSelectMs => _diagSelectMs;
+
+        private static readonly Stopwatch _debugClock = Stopwatch.StartNew();
 
         public event EventDataHandler OnSelectItem;
 
@@ -405,6 +593,8 @@ namespace DJMaxEditor
             hScrollBar.Value = 0;
             vScrollBar.Value = 0;
             _vScrollBarUpper.Value = 0;
+            _smoothVirtualTick = 0;
+            _playheadStripValid = false;
 
             DrawingArea.Width = Math.Max((int)playerData.MaxTick, _drawableZone.Width);
 
@@ -617,6 +807,8 @@ namespace DJMaxEditor
 
         private bool _isPlayerPlaying;
 
+        private double _smoothVirtualTick;
+
         private float _zoom = DefaultZoom;
 
         private bool _ready = false;
@@ -749,30 +941,54 @@ namespace DJMaxEditor
 
         private bool IsFollowing => FollowTracksProgressWhilePlaying && IsPlayerPlaying && (_playerData.CurrentTick < _playerData.MaxTick);
 
-        private void DrawToBuffer(Graphics g) 
+        // Paint-phase diagnostics (see DebugEventsMs); reset per frame.
+        private double _diagScrollMs;
+        private double _diagPanesMs;
+        private double _diagProgressMs;
+        private double _diagSelectMs;
+        private double _diagEventsMs;
+
+        private void DrawToBuffer(Graphics g)
         {
             if (!_ready) { return; }
 
+            var frameWatch = Stopwatch.StartNew();
             var gw = m_gw;
             gw.UpdateGraphics(g);
+
+            GraphicsWrapper.DebugDrawImageCalls = 0;
+            GraphicsWrapper.DebugUncachedDraws = 0;
+            TracksRenderer.BeginFrameDiagnostics();
+            _diagScrollMs = 0;
+            _diagPanesMs = 0;
+            _diagProgressMs = 0;
+            _diagSelectMs = 0;
+            _diagEventsMs = 0;
 
             // If checked, follow playing track progression
             if (IsFollowing) {
 
-                const int spacing = 150;
-                var pos = _playerData.VirtualCurrentTick > spacing ? _playerData.VirtualCurrentTick - spacing : _playerData.VirtualCurrentTick;
+                const double spacing = 150;
+                var pos = _smoothVirtualTick > spacing ? _smoothVirtualTick - spacing : _smoothVirtualTick;
 
-                ScrollTo((int)(pos * _zoom), -1);
+                ScrollTo((int)Math.Round(pos * _zoom), -1);
                 UpdateScrollbars();
             }
+
+            _diagScrollMs = frameWatch.Elapsed.TotalMilliseconds;
 
             if (_playerData == null) {
                 return;
             }
 
             g.SmoothingMode = SmoothingMode.AntiAlias;
-            g.InterpolationMode = InterpolationMode.HighQualityBicubic;
-            g.PixelOffsetMode = PixelOffsetMode.HighQuality;
+            // Bicubic buys nothing visible when zoomed out (the common playback
+            // case) but costs several times more per scaled sprite; reserve it
+            // for zoomed-in editing.
+            g.InterpolationMode = _zoom >= 1.0f
+                ? InterpolationMode.HighQualityBicubic
+                : InterpolationMode.HighQualityBilinear;
+            g.PixelOffsetMode = PixelOffsetMode.Half;
 
             var beatSize = EventData.VirtualTickSize * _playerData.TickPerMinute;
             var blockSize = beatSize / _noteValue;
@@ -788,6 +1004,7 @@ namespace DJMaxEditor
             {
                 DrawPane(g, gw, 0, DrawingArea.Height, 0, LowerViewY, beatSize, blockSize);
             }
+            _diagPanesMs = frameWatch.Elapsed.TotalMilliseconds - _diagScrollMs;
         }
 
         private void DrawPane(Graphics g, GraphicsWrapper gw, int screenTop, int screenHeight, int virtualTop, int viewY, int beatSize, int blockSize)
@@ -802,20 +1019,41 @@ namespace DJMaxEditor
                 _viewablePixels.Width,
                 (int)Math.Ceiling(screenHeight / _zoom));
 
+            var phaseWatch = Stopwatch.StartNew();
             GraphicsState state = g.Save();
             try
             {
                 g.ResetTransform();
-                g.SetClip(new Rectangle(0, screenTop, DrawingArea.Width, screenHeight));
+                // Intersect - not replace - so a strip invalidate from the playback
+                // pump keeps WM_PAINT's dirty-region clip instead of having it widened
+                // back to the whole pane.
+                g.SetClip(new Rectangle(0, screenTop, DrawingArea.Width, screenHeight), CombineMode.Intersect);
                 g.ScaleTransform(_zoom, _zoom, MatrixOrder.Prepend);
                 g.TranslateTransform(-_viewablePixels.X, translateY);
 
                 TracksRenderer.RenderTracskList(gw, _playerData.Tracks, bounds, beatSize, blockSize, _playerData.VirtualMaxTick, _drawableZone);
+                double afterTracks = phaseWatch.Elapsed.TotalMilliseconds;
 
-                _progress.Position = _playerData.VirtualCurrentTick;
+                _progress.Position = _smoothVirtualTick;
                 _progress.Render(gw, bounds);
+                double afterProgress = phaseWatch.Elapsed.TotalMilliseconds;
+                _diagProgressMs += afterProgress - afterTracks;
 
                 _selectMode?.Render(gw);
+                double afterSelect = phaseWatch.Elapsed.TotalMilliseconds;
+                _diagSelectMs += afterSelect - afterProgress;
+
+                // Events in device space: capture the virtual-to-device mapping,
+                // drop the world transform, and let every note go out as a plain
+                // integer blit (see GraphicsWrapper.BeginDeviceSpace).
+                using (var deviceTransform = g.Transform)
+                {
+                    gw.BeginDeviceSpace(deviceTransform);
+                    g.ResetTransform();
+                    TracksRenderer.RenderTrackEvents(gw, _playerData.Tracks, bounds, _drawableZone);
+                    gw.EndDeviceSpace();
+                }
+                _diagEventsMs += phaseWatch.Elapsed.TotalMilliseconds - afterSelect;
             }
             finally
             {
@@ -865,9 +1103,22 @@ namespace DJMaxEditor
             OnUndoRedo?.Invoke(UndoManager, null);
         }
 
-        private void DrawingArea_Paint(object sender, PaintEventArgs e) 
+        private void DrawingArea_Paint(object sender, PaintEventArgs e)
         {
-            DrawToBuffer(e.Graphics);
+            var paintWatch = Stopwatch.StartNew();
+            try
+            {
+                DrawToBuffer(e.Graphics);
+            }
+            finally
+            {
+                paintWatch.Stop();
+                DebugPaintCount++;
+                DebugPaintMilliseconds = paintWatch.Elapsed.TotalMilliseconds;
+                double nowMs = _debugClock.Elapsed.TotalMilliseconds;
+                DebugLastPaintDeltaMs = DebugLastPaintAtMs > 0 ? nowMs - DebugLastPaintAtMs : 0;
+                DebugLastPaintAtMs = nowMs;
+            }
         }
 
         public void UpdateScrollbars() 
@@ -1014,7 +1265,31 @@ namespace DJMaxEditor
                 if (res)
                 {
                     return;
-                }                
+                }
+            }
+
+            // Empty Select click: park the playhead so Play can start mid-chart
+            // (keysound calibration). Snapped to the same grid as note placement.
+            if (e.Button == MouseButtons.Left &&
+                activeTool == TimelineTool.Select &&
+                !additiveSelection &&
+                _selectMode != null)
+            {
+                int seekTick = Math.Max(0, _selectMode.EvaluateBlock(virtualX, true));
+                SetPlayheadPosition(seekTick);
+                if (_playerData != null)
+                {
+                    _playerData.CurrentTick = seekTick / EventData.VirtualTickSize;
+                }
+                if (PlayheadSeekRequested != null)
+                {
+                    PlayheadSeekRequested(this, seekTick);
+                }
+                if (!IsPlayerPlaying)
+                {
+                    Redraw();
+                }
+                return;
             }
 
             if (leftAndControlPressed) {

@@ -31,6 +31,8 @@
     <UseApplicationTrust>false</UseApplicationTrust>
     <PublishWizardCompleted>true</PublishWizardCompleted>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <NuGetPackageImportStamp>
+    </NuGetPackageImportStamp>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|x86' ">
     <PlatformTarget>x86</PlatformTarget>
@@ -75,8 +77,55 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="Microsoft.Bcl.AsyncInterfaces, Version=10.0.0.12, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\Microsoft.Bcl.AsyncInterfaces.10.0.12\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
+    </Reference>
+    <Reference Include="Newtonsoft.Json, Version=13.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
+      <HintPath>..\packages\Newtonsoft.Json.13.0.4\lib\net45\Newtonsoft.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.4.2.0\lib\net45\SharpDX.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Direct3D9, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.Direct3D9.4.2.0\lib\net45\SharpDX.Direct3D9.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.DXGI, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.DXGI.4.2.0\lib\net45\SharpDX.DXGI.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.Mathematics, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.Mathematics.4.2.0\lib\net45\SharpDX.Mathematics.dll</HintPath>
+    </Reference>
+    <Reference Include="SharpDX.MediaFoundation, Version=4.2.0.0, Culture=neutral, PublicKeyToken=b4dcf0f35e5521f1, processorArchitecture=MSIL">
+      <HintPath>..\packages\SharpDX.MediaFoundation.4.2.0\lib\net45\SharpDX.MediaFoundation.dll</HintPath>
+    </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Buffers, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Buffers.4.6.1\lib\net462\System.Buffers.dll</HintPath>
+    </Reference>
     <Reference Include="System.Core" />
+    <Reference Include="System.IO.Pipelines, Version=10.0.0.12, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.IO.Pipelines.10.0.12\lib\net462\System.IO.Pipelines.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Memory, Version=4.0.5.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Memory.4.6.3\lib\net462\System.Memory.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Numerics" />
+    <Reference Include="System.Numerics.Vectors, Version=4.1.6.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Numerics.Vectors.4.6.1\lib\net462\System.Numerics.Vectors.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Runtime.CompilerServices.Unsafe, Version=6.0.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Runtime.CompilerServices.Unsafe.6.1.2\lib\net462\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Encodings.Web, Version=10.0.0.12, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Text.Encodings.Web.10.0.12\lib\net462\System.Text.Encodings.Web.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Text.Json, Version=10.0.0.12, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Text.Json.10.0.12\lib\net462\System.Text.Json.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Threading.Tasks.Extensions, Version=4.2.4.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\packages\System.Threading.Tasks.Extensions.4.6.3\lib\net462\System.Threading.Tasks.Extensions.dll</HintPath>
+    </Reference>
+    <Reference Include="System.ValueTuple" />
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
     <Reference Include="Microsoft.CSharp" />
@@ -85,27 +134,6 @@
     <Reference Include="System.Drawing" />
     <Reference Include="System.Windows.Forms" />
     <Reference Include="System.Xml" />
-    <Reference Include="Microsoft.Bcl.AsyncInterfaces">
-      <HintPath>..\packages\microsoft.bcl.asyncinterfaces.8.0.0\lib\net462\Microsoft.Bcl.AsyncInterfaces.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Buffers">
-      <HintPath>..\packages\system.buffers.4.5.1\lib\net461\System.Buffers.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Memory">
-      <HintPath>..\packages\system.memory.4.5.5\lib\net461\System.Memory.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Runtime.CompilerServices.Unsafe">
-      <HintPath>..\packages\system.runtime.compilerservices.unsafe.6.0.0\lib\net461\System.Runtime.CompilerServices.Unsafe.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Text.Encodings.Web">
-      <HintPath>..\packages\system.text.encodings.web.8.0.0\lib\net462\System.Text.Encodings.Web.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Text.Json">
-      <HintPath>..\packages\system.text.json.8.0.5\lib\net462\System.Text.Json.dll</HintPath>
-    </Reference>
-    <Reference Include="System.Threading.Tasks.Extensions">
-      <HintPath>..\packages\system.threading.tasks.extensions.4.5.4\lib\net461\System.Threading.Tasks.Extensions.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AboutForm.cs">
@@ -156,6 +184,15 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Preview\GameplayPreviewProjector.cs" />
+    <Compile Include="Preview\TechnikaCountIn.cs" />
+    <Compile Include="Preview\TechnikaEffectors.cs" />
+    <Compile Include="Preview\TechnikaHitEffectProfile.cs" />
+    <Compile Include="Preview\TechnikaHitFlash.cs" />
+    <Compile Include="Preview\TechnikaNoteSprites.cs" />
+    <Compile Include="Preview\TechnikaPlayfieldMetrics.cs" />
+    <Compile Include="Preview\TechnikaPlayfieldRenderer.cs" />
+    <Compile Include="Preview\TechnikaPlayfieldTheme.cs" />
+    <Compile Include="Preview\TechnikaSpriteStyles.cs" />
     <Compile Include="UI\StudioDesignSystem.cs" />
     <Compile Include="UI\StudioCommandPaletteForm.cs">
       <SubType>Form</SubType>
@@ -167,10 +204,24 @@
       <SubType>Component</SubType>
     </Compile>
     <Compile Include="UI\StudioWorkspacePreset.cs" />
+    <Compile Include="UI\StudioDropdown.cs" />
     <Compile Include="UI\EmptyWorkspaceControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
     <Compile Include="UI\StudioTheme.cs" />
+    <Compile Include="Video\BgaClockMap.cs" />
+    <Compile Include="Video\BgaPlayer.cs" />
+    <Compile Include="Video\BgaPreviewControl.cs">
+      <SubType>Component</SubType>
+    </Compile>
+    <Compile Include="Video\BgaPreviewForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Video\BgaSourceResolver.cs" />
+    <Compile Include="Video\IBgaSource.cs" />
+    <Compile Include="Video\MediaFoundationBgaSource.cs" />
+    <Compile Include="Video\NullBgaSource.cs" />
+    <Compile Include="Controls\Editor\DisplayRefreshRate.cs" />
     <Compile Include="Controls\Editor\EditorRenderControl.cs">
       <SubType>UserControl</SubType>
     </Compile>
@@ -182,6 +233,7 @@
     <Compile Include="Controls\Editor\Handlers\EventDataHandler.cs" />
     <Compile Include="Controls\Editor\GraphicsWrapper.cs" />
     <Compile Include="Controls\Editor\Handlers\EventRequestHandler.cs" />
+    <Compile Include="Controls\Editor\RenderPacer.cs" />
     <Compile Include="Controls\Editor\Renderers\EventsRenderer.cs" />
     <Compile Include="Controls\Editor\Renderers\Events\Cyclon\CyclonEventRenderer.cs" />
     <Compile Include="Controls\Editor\Renderers\Events\EventDisplayMode.cs" />
@@ -211,6 +263,7 @@
     </Compile>
     <Compile Include="Files\tech\TechOpenFile.cs" />
     <Compile Include="Files\tech\TechSaveFile.cs" />
+    <Compile Include="Files\tech\OggVorbisDuration.cs" />
     <Compile Include="Files\bms\BMESaveFile.cs" />
     <Compile Include="Files\bms\BmsChartSerializer.cs" />
     <Compile Include="Files\bms\BmsonChartSerializer.cs" />
@@ -748,4 +801,22 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <!--
+    The TECHNIKA playfield resolves the owner's own arcade sprite extraction from
+    LocalAssets\Technika2 beside the exe (or the DJMAX_EDITOR_TECHNIKA_ASSETS env var).
+    Assets are machine-local and gitignored; this wildcard flows them to the output
+    folder when they exist, exactly like the reference project's Studio shell.
+  -->
+  <ItemGroup>
+    <Content Include="LocalAssets\Technika2\**\*.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+  <Import Project="..\packages\System.ValueTuple.4.6.2\build\net471\System.ValueTuple.targets" Condition="Exists('..\packages\System.ValueTuple.4.6.2\build\net471\System.ValueTuple.targets')" />
+  <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <ErrorText>这台计算机上缺少此项目引用的 NuGet 程序包。使用“NuGet 程序包还原”可下载这些程序包。有关更多信息，请参见 http://go.microsoft.com/fwlink/?LinkID=322105。缺少的文件是 {0}。</ErrorText>
+    </PropertyGroup>
+    <Error Condition="!Exists('..\packages\System.ValueTuple.4.6.2\build\net471\System.ValueTuple.targets')" Text="$([System.String]::Format('$(ErrorText)', '..\packages\System.ValueTuple.4.6.2\build\net471\System.ValueTuple.targets'))" />
+  </Target>
 </Project>

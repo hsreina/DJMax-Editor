@@ -21,7 +21,7 @@ namespace DJMaxEditor
         private readonly Func<int> _getCurrentVirtualTick;
         private readonly Action<EventData> _locateNote;
 
-        private readonly ComboBox _search;
+        private readonly StudioDropdown _search;
         private readonly DataGridView _results;
         private readonly Label _status;
         private readonly Button _findNext;
@@ -60,12 +60,10 @@ namespace DJMaxEditor
                 Location = new Point(0, 3),
                 Text = "Sound file name:"
             };
-            _search = new ComboBox
+            _search = new StudioDropdown
             {
                 Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-                AutoCompleteMode = AutoCompleteMode.SuggestAppend,
-                AutoCompleteSource = AutoCompleteSource.ListItems,
-                DropDownStyle = ComboBoxStyle.DropDown,
+                Editable = true,
                 Location = new Point(0, 22),
                 Width = 536
             };

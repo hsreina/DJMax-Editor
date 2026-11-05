@@ -1,4 +1,4 @@
-﻿using DJMaxEditor.Controls.Editor;
+using DJMaxEditor.Controls.Editor;
 using System.Drawing;
 
 namespace DJMaxEditor 
@@ -6,9 +6,10 @@ namespace DJMaxEditor
     internal class ProgressBar 
     {
         /// <summary>
-        /// Current position
+        /// Current position, in virtual ticks at sub-tick precision: the playhead line is
+        /// drawn from this, and whole-tick steps would stutter at low tempos.
         /// </summary>
-        public int Position { get; set; }
+        public double Position { get; set; }
 
         /// <summary>
         /// The width
@@ -30,7 +31,11 @@ namespace DJMaxEditor
         /// <param name="viewablePixels"></param>
         public void Render(GraphicsWrapper g, Rectangle viewablePixels)
         {
-            g.FillRectangle(m_brush1, Position - (Width / 2), viewablePixels.Y, Width, viewablePixels.Height);
+            g.FillRectangle(m_brush1, new RectangleF(
+                (float)(Position - (Width / 2.0)),
+                viewablePixels.Y,
+                Width,
+                viewablePixels.Height));
         }
 
         /// <summary>
