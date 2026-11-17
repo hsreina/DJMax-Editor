@@ -2356,9 +2356,16 @@ namespace DJMaxEditor
 
             // Stopped or paused: start from the parked playhead so keysound checks can
             // begin mid-chart (click empty timeline to move it). Playing: pause.
+            // After natural end the playhead still sits at MaxTick while Player.Reset()
+            // already zeroed the sequencer — start from 0 in that case.
             if (m_player.IsStopped || m_player.IsPaused)
             {
                 int tick = GetPlayheadNativeTick();
+                if (IsNativeTickAtOrPastEnd(tick))
+                {
+                    tick = 0;
+                    SeekPlayheadAndMaybePlay(0, forcePlay: false);
+                }
                 m_audioPlayer.StopAllSounds();
                 m_player.Play(tick);
                 RestoreSoundingVoices(tick);
@@ -2381,6 +2388,20 @@ namespace DJMaxEditor
             int virtualTick = m_editorForm.ActiveSurface.PlayheadVirtualTick;
             int tick = virtualTick / EventData.VirtualTickSize;
             return tick < 0 ? 0 : tick;
+        }
+
+        /// <summary>
+        /// True when the playhead is at/past the authored end — the spot left after
+        /// natural song end, where pressing Play would instantly re-stop.
+        /// </summary>
+        private bool IsNativeTickAtOrPastEnd(int nativeTick)
+        {
+            if (m_playerData == null)
+            {
+                return false;
+            }
+            int maxTick = m_playerData.MaxTick;
+            return maxTick > 0 && nativeTick >= maxTick;
         }
 
         private void toolStripButton2_Click(object sender, EventArgs e)
@@ -3093,6 +3114,13 @@ namespace DJMaxEditor
                 // (Re)start: drop the stale frame-time baseline so the first reading is honest.
                 m_lastPlaybackFrameMilliseconds = -1;
                 m_lastPlaybackVirtualTick = -1;
+            }
+            else if (!playing && m_playbackPumpWasPlaying && m_player.IsStopped
+                     && IsNativeTickAtOrPastEnd(GetPlayheadNativeTick()))
+            {
+                // Natural end: Player.Reset() already zeroed the sequencer; snap the UI
+                // playhead to match so the next Play starts from the top.
+                SeekPlayheadAndMaybePlay(0, forcePlay: false);
             }
             m_playbackPumpWasPlaying = playing;
             if (!playing)
