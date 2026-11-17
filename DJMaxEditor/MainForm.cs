@@ -3172,9 +3172,9 @@ namespace DJMaxEditor
         }
 
         /// <summary>
-        /// Parks the playhead at <paramref name="virtualTick"/>. When already running
-        /// (or <paramref name="forcePlay"/>), restarts playback from that spot so KEY
-        /// sound calibration can jump around the chart without returning to tick 0.
+        /// Parks the playhead at <paramref name="virtualTick"/>. Only <paramref name="forcePlay"/>
+        /// (Go-To-Tick) or an already-running transport restarts audio from that spot —
+        /// a scrub while paused/stopped must not auto-play.
         /// Always pushes the BGA/preview to the same tick - the playback pump alone
         /// would leave the video stranded until the next timer tick (or forever while
         /// stopped).
@@ -3199,7 +3199,8 @@ namespace DJMaxEditor
 
             if (m_player.IsReady)
             {
-                bool restart = forcePlay || m_player.IsPlaying || m_player.IsPaused;
+                // Playing: restart from the new spot. Paused/stopped: park only.
+                bool restart = forcePlay || m_player.IsPlaying;
                 if (restart)
                 {
                     m_audioPlayer.StopAllSounds();

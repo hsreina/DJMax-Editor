@@ -396,8 +396,9 @@ namespace DJMaxEditor.Controls.TimelineV2
                 return;
             }
 
-            // Left click on the lane area parks the playhead for play-from-spot.
+            // Left click on the lane area parks the playhead while stopped/paused only.
             if (e.Button == MouseButtons.Left &&
+                !IsPlaybackActive &&
                 _viewport != null &&
                 _coordinates != null &&
                 e.X >= _coordinates.HeaderWidth)

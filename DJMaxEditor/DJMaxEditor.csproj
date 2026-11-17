@@ -513,6 +513,8 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="DJMax\Player.cs" />
+    <Compile Include="DJMax\TechnikaChainTopology.cs" />
+    <Compile Include="DJMax\TechnikaRepeatTopology.cs" />
     <Compile Include="libs\CustomTimer.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="SingleInstance.cs" />

@@ -1268,13 +1268,18 @@ namespace DJMaxEditor
                 }
             }
 
-            // Empty Select click: park the playhead so Play can start mid-chart
-            // (keysound calibration). Snapped to the same grid as note placement.
+            // Empty Select click parks the playhead only while stopped/paused —
+            // scrubbing mid-playback would yank the transport and restart audio.
             if (e.Button == MouseButtons.Left &&
                 activeTool == TimelineTool.Select &&
                 !additiveSelection &&
                 _selectMode != null)
             {
+                if (IsPlayerPlaying)
+                {
+                    return;
+                }
+
                 int seekTick = Math.Max(0, _selectMode.EvaluateBlock(virtualX, true));
                 SetPlayheadPosition(seekTick);
                 if (_playerData != null)
@@ -1285,10 +1290,7 @@ namespace DJMaxEditor
                 {
                     PlayheadSeekRequested(this, seekTick);
                 }
-                if (!IsPlayerPlaying)
-                {
-                    Redraw();
-                }
+                Redraw();
                 return;
             }
 

@@ -112,6 +112,18 @@ namespace DJMaxEditor.Tests
                 AssertTrue(chart.Notes.Single(n => n.Source == repeatMember).Kind ==
                     GameplayPreviewNoteKind.RepeatHold,
                     "second per-lane repeat head was not converted to a repeat member");
+
+                // Timeline V1 uses the same topology helper so its polyline/glyphs match preview.
+                var timelineImplicit = TechnikaChainTopology.FindImplicitChainNodes(model.Tracks);
+                AssertTrue(timelineImplicit.Contains(promoted),
+                    "timeline chain topology missed the promoted basic waypoint");
+                AssertTrue(!timelineImplicit.Contains(reverted),
+                    "timeline chain topology absorbed a simultaneous close-tick basic");
+
+                var intermediateRepeats =
+                    TechnikaRepeatTopology.FindIntermediateHeads(model.Tracks);
+                AssertTrue(intermediateRepeats.Contains(repeatMember),
+                    "timeline repeat topology missed the legacy intermediate head");
             });
 
             Test("GameplayPreview_FrameUsesTheSharedModelTickAndActivationBoundary", () =>

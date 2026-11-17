@@ -185,6 +185,11 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                     DrawDragBody(g, DJMRessources.longnoteline, x, y, eventData.VirtualDuration, 76);
                     DrawImageHd(g, TechnikaHdAssets.LongHead, x - (116 / 2), y - (116 / 2), 116, 116);
                 }
+                else if (_implicitChainNodes != null && _implicitChainNodes.Contains(eventData))
+                {
+                    // Legacy .pt left this tap untagged; preview promotes it to a chain node.
+                    DrawImageHd(g, TechnikaHdAssets.PressEnd, x - (76 / 2), y - (76 / 2), 76, 76);
+                }
                 else
                 {
                     DrawImageHd(g, TechnikaHdAssets.Basic, x - (90 / 2), y - (90 / 2), 90, 90);
@@ -200,11 +205,29 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                 DrawImageHd(g, TechnikaHdAssets.PressEnd, x - (76 / 2), y - (76 / 2), 76, 76);
             }
             else if (eventData.Attribute == (byte)EventAttribute.RepeatNote)
-            { // note repeat — series link is drawn by RenderRepeatSeriesLinks
-                DrawImageHd(g, TechnikaHdAssets.RepeatHead, x - (90 / 2), y - (90 / 2), 90, 90);
+            { // note repeat — series link is drawn by RenderSeriesLinks
+                if (eventData.Duration > 6)
+                {
+                    // Held body only (RepeatHeadHold). The Head→End connector is the thin
+                    // series pen, same role as preview's noterepeatline.
+                    DrawSolidTrail(g, RepeatHoldTrailBrush, x, y, eventData.VirtualDuration, 90);
+                }
+                if (_intermediateRepeatHeads != null &&
+                    _intermediateRepeatHeads.Contains(eventData))
+                {
+                    DrawImageHd(g, TechnikaHdAssets.RepeatTail, x - (90 / 2), y - (90 / 2), 90, 90);
+                }
+                else
+                {
+                    DrawImageHd(g, TechnikaHdAssets.RepeatHead, x - (90 / 2), y - (90 / 2), 90, 90);
+                }
             }
             else if (eventData.Attribute == (byte)EventAttribute.RepeatNoteEnd)
             { // note repeat end
+                if (eventData.Duration > 6)
+                {
+                    DrawSolidTrail(g, RepeatHoldTrailBrush, x, y, eventData.VirtualDuration, 90);
+                }
                 DrawImageHd(g, TechnikaHdAssets.RepeatTail, x - (90 / 2), y - (90 / 2), 90, 90);
             }
             else if (eventData.Attribute == (byte)EventAttribute.LongHoldNote)
@@ -278,16 +301,16 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                 null);
         }
 
-        // Hold/repeat/press trails are single-color solid bars in Technika, drawn
-        // semi-transparent so the lane grid stays readable underneath.
+        // Hold bodies stay a soft filled tube; repeat/chain series connectors are pens so
+        // they match the playfield's thin noterepeatline / chain run (≈18% of note size).
         private static readonly Brush HoldTrailBrush =
             new SolidBrush(Color.FromArgb(120, 45, 100, 235));
 
-        private static readonly Brush RepeatTrailBrush =
-            new SolidBrush(Color.FromArgb(120, 155, 65, 225));
+        private static readonly Brush RepeatHoldTrailBrush =
+            new SolidBrush(Color.FromArgb(140, 155, 65, 225));
 
-        private static readonly Brush PressTrailBrush =
-            new SolidBrush(Color.FromArgb(120, 70, 190, 80));
+        private static readonly Pen RepeatSeriesPen =
+            new Pen(Color.FromArgb(200, 175, 80, 235), 10f);
 
         private static readonly Pen PressTrailPen =
             new Pen(Color.FromArgb(180, 70, 190, 80), 10f);
@@ -298,18 +321,25 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
             {
                 return;
             }
-            int lineHeight = height / 3;
+            // Preview's flat hold fallback is ~0.42 of the note frame - thin enough to read
+            // as a tube, not a lane-filling block.
+            int lineHeight = Math.Max(10, (height * 2) / 5);
             g.FillRectangle(brush, x, y - lineHeight / 2, duration, lineHeight);
         }
 
         /// <summary>
         /// Same-track Repeat bars, plus cross-lane Press/chain polylines in chart-time order.
+        /// Rebuilds the implicit-chain and intermediate-repeat sets first so note glyphs
+        /// painted later this frame match the playfield preview.
         /// </summary>
         public void RenderSeriesLinks(
             GraphicsWrapper g,
             TracksList tracks,
             Rectangle bounds)
         {
+            _implicitChainNodes = TechnikaChainTopology.FindImplicitChainNodes(tracks);
+            _intermediateRepeatHeads = TechnikaRepeatTopology.FindIntermediateHeads(tracks);
+
             if (g == null || tracks == null)
             {
                 return;
@@ -324,19 +354,94 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
 
                 int centerY = (int)track.Idx * EventsRenderer.VirtualTrackheight +
                     EventsRenderer.VirtualTrackheight / 2;
-                RenderAttributeSeriesLinks(
-                    g, track, bounds, centerY,
-                    (byte)EventAttribute.RepeatNote,
-                    (byte)EventAttribute.RepeatNoteEnd,
-                    RepeatTrailBrush);
+                RenderRepeatSeriesLinks(g, track, bounds, centerY);
             }
 
             RenderPressChainLinks(g, tracks, bounds);
         }
 
         /// <summary>
+        /// Same-lane Repeat Head→…→End connector. Drawn as a thin pen stroke (preview's
+        /// noterepeatline), not a filled block — held bodies are painted on the notes.
+        /// </summary>
+        private void RenderRepeatSeriesLinks(
+            GraphicsWrapper g,
+            TrackData track,
+            Rectangle bounds,
+            int centerY)
+        {
+            bool open = false;
+            bool endSeen = false;
+            int headX = 0;
+            int endX = 0;
+
+            foreach (EventData evt in track.Events)
+            {
+                if (evt == null || evt.EventType != EventType.Note)
+                {
+                    continue;
+                }
+
+                byte attr = evt.Attribute;
+                if (attr == (byte)EventAttribute.RepeatNote)
+                {
+                    if (open && !endSeen)
+                    {
+                        endX = Math.Max(endX, MemberEndX(evt));
+                    }
+                    else
+                    {
+                        FlushRepeatSeriesLink(g, bounds, headX, endX, centerY, open);
+                        open = true;
+                        endSeen = false;
+                        headX = evt.VirtualTick;
+                        endX = MemberEndX(evt);
+                    }
+                }
+                else if (attr == (byte)EventAttribute.RepeatNoteEnd)
+                {
+                    if (open)
+                    {
+                        endSeen = true;
+                        endX = Math.Max(endX, MemberEndX(evt));
+                    }
+                }
+                else if (open)
+                {
+                    FlushRepeatSeriesLink(g, bounds, headX, endX, centerY, open);
+                    open = false;
+                    endSeen = false;
+                }
+            }
+
+            FlushRepeatSeriesLink(g, bounds, headX, endX, centerY, open);
+        }
+
+        private static void FlushRepeatSeriesLink(
+            GraphicsWrapper g,
+            Rectangle bounds,
+            int headX,
+            int endX,
+            int centerY,
+            bool open)
+        {
+            if (!open || endX <= headX)
+            {
+                return;
+            }
+
+            if (headX > bounds.Right || endX < bounds.Left)
+            {
+                return;
+            }
+
+            g.DrawLine(RepeatSeriesPen, headX, centerY, endX, centerY);
+        }
+
+        /// <summary>
         /// Press/chain paths cross lanes. Head first, then nodes by VirtualTick (then lane Y)
-        /// — same pulse order DJMAX STUDIO uses for the zigzag path.
+        /// — same pulse order DJMAX STUDIO uses for the zigzag path. Implicit Basic waypoints
+        /// inside a span are included so the polyline matches Gameplay Preview.
         /// </summary>
         private void RenderPressChainLinks(
             GraphicsWrapper g,
@@ -359,8 +464,15 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                     {
                         continue;
                     }
-                    if (evt.Attribute != (byte)EventAttribute.PressNote &&
-                        evt.Attribute != (byte)EventAttribute.PressNoteEnd)
+                    bool explicitChain =
+                        evt.Attribute == (byte)EventAttribute.PressNote ||
+                        evt.Attribute == (byte)EventAttribute.PressNoteEnd;
+                    bool implicitNode =
+                        evt.Attribute == (byte)EventAttribute.BasicNote &&
+                        evt.Duration <= 6 &&
+                        _implicitChainNodes != null &&
+                        _implicitChainNodes.Contains(evt);
+                    if (!explicitChain && !implicitNode)
                     {
                         continue;
                     }
@@ -395,6 +507,17 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                 DrawPressChainSpan(g, bounds, members, spanStart, members.Count - 1);
             }
         }
+
+        /// <summary>
+        /// Basic notes promoted to chain waypoints for the current paint. Filled by
+        /// <see cref="RenderSeriesLinks"/> before note glyphs are drawn.
+        /// </summary>
+        private HashSet<EventData> _implicitChainNodes;
+
+        /// <summary>
+        /// Legacy attr-10 waypoints demoted to repeat tails for the current paint.
+        /// </summary>
+        private HashSet<EventData> _intermediateRepeatHeads;
 
         private static void DrawPressChainSpan(
             GraphicsWrapper g,
@@ -444,63 +567,6 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
             public readonly EventData Event;
             public readonly int CenterY;
         }
-        private static void RenderAttributeSeriesLinks(
-            GraphicsWrapper g,
-            TrackData track,
-            Rectangle bounds,
-            int centerY,
-            byte headAttr,
-            byte endAttr,
-            Brush brush)
-        {
-            bool open = false;
-            bool endSeen = false;
-            int headX = 0;
-            int endX = 0;
-
-            foreach (EventData evt in track.Events)
-            {
-                if (evt == null || evt.EventType != EventType.Note)
-                {
-                    continue;
-                }
-
-                byte attr = evt.Attribute;
-                if (attr == headAttr)
-                {
-                    if (open && !endSeen)
-                    {
-                        // Legacy intermediate tick still tagged as a head.
-                        endX = System.Math.Max(endX, MemberEndX(evt));
-                    }
-                    else
-                    {
-                        FlushSeriesLink(g, bounds, brush, headX, endX, centerY, open);
-                        open = true;
-                        endSeen = false;
-                        headX = evt.VirtualTick;
-                        endX = MemberEndX(evt);
-                    }
-                }
-                else if (attr == endAttr)
-                {
-                    if (open)
-                    {
-                        endSeen = true;
-                        endX = System.Math.Max(endX, MemberEndX(evt));
-                    }
-                }
-                else if (open)
-                {
-                    FlushSeriesLink(g, bounds, brush, headX, endX, centerY, open);
-                    open = false;
-                    endSeen = false;
-                }
-            }
-
-            FlushSeriesLink(g, bounds, brush, headX, endX, centerY, open);
-        }
-
         private static int MemberEndX(EventData evt)
         {
             int end = evt.VirtualTick;
@@ -509,28 +575,6 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Events
                 end += evt.VirtualDuration;
             }
             return end;
-        }
-
-        private static void FlushSeriesLink(
-            GraphicsWrapper g,
-            Rectangle bounds,
-            Brush brush,
-            int headX,
-            int endX,
-            int centerY,
-            bool open)
-        {
-            if (!open || endX <= headX)
-            {
-                return;
-            }
-
-            if (headX > bounds.Right || endX < bounds.Left)
-            {
-                return;
-            }
-
-            DrawSolidTrail(g, brush, headX, centerY, endX - headX, 90);
         }
     }
 }
