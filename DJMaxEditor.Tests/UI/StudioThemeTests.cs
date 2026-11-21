@@ -92,7 +92,7 @@ namespace DJMaxEditor.Tests
 
                 using (var editor = new EditorControl())
                 {
-                    var canvas = (PictureBox)typeof(EditorControl)
+                    var canvas = (Control)typeof(EditorControl)
                         .GetField("DrawingArea", BindingFlags.Instance | BindingFlags.NonPublic)
                         .GetValue(editor);
                     AssertTrue(canvas.BackColor == StudioDesignSystem.Void,

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -24,7 +24,7 @@ namespace DJMaxEditor.libs {
                     xmlDocument.Save(fileName);
                     stream.Close();
                 }
-            } catch (Exception ex) {
+            } catch (Exception) {
                 //Log exception here
             }
         }
@@ -53,7 +53,7 @@ namespace DJMaxEditor.libs {
 
                     read.Close();
                 }
-            } catch (Exception ex) {
+            } catch (Exception) {
                 //Log exception here
             }
 

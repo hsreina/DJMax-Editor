@@ -189,8 +189,28 @@ namespace DJMaxEditor.Panels
             }
         }
 
-        private void AvailableNotesList_MouseDown(object sender, MouseEventArgs e) 
-        { }
+        private void AvailableNotesList_MouseDown(object sender, MouseEventArgs e)
+        {
+            // Get the index of the item the mouse is below.
+            rowIndexFromMouseDown = AvailableNotesList.HitTest(e.X, e.Y).RowIndex;
+
+            if (rowIndexFromMouseDown != -1) {
+                // Remember the point where the mouse down occurred.
+                // The DragSize indicates the size that the mouse can move
+                // before a drag event should be started.
+                Size dragSize = SystemInformation.DragSize;
+
+                // Create a rectangle using mouseDownPoint, autosize and center.
+                dragBoxFromMouseDown = new Rectangle(
+                    new Point(e.X - (dragSize.Width / 2),
+                              e.Y - (dragSize.Height / 2)),
+                    dragSize);
+            }
+            else {
+                // Reset the rectangle if the mouse is not over an item.
+                dragBoxFromMouseDown = Rectangle.Empty;
+            }
+        }
 
         private void AvailableNotesList_DragOver(object sender, DragEventArgs e) 
         {

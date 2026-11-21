@@ -1,13 +1,25 @@
-﻿using System;
+using System;
 using System.Windows.Forms;
 
 namespace DJMaxEditor.Controls.Editor
 {
-    public partial class EditorRenderControl : UserControl
+    /// <summary>
+    /// Paint surface for the legacy editor timeline. The editor repaints the
+    /// whole client area on every frame, so OptimizedDoubleBuffer rasterizes
+    /// off-screen and presents complete frames instead of drawing straight to
+    /// the visible DC (which both tears and blocks the UI thread longer).
+    /// </summary>
+    public partial class EditorRenderControl : Control
     {
         public EditorRenderControl()
         {
             InitializeComponent();
+            SetStyle(
+                ControlStyles.UserPaint |
+                ControlStyles.AllPaintingInWmPaint |
+                ControlStyles.OptimizedDoubleBuffer |
+                ControlStyles.ResizeRedraw,
+                true);
         }
 
         protected override CreateParams CreateParams
@@ -19,22 +31,5 @@ namespace DJMaxEditor.Controls.Editor
                 return cp;
             }
         }
-
-        /*
-        protected override void OnPaint(PaintEventArgs e)
-        {
-            base.OnPaint(e);
-        }
-
-        protected override void OnSizeChanged(EventArgs e)
-        {
-            Invalidate();
-        }
-
-        private void renderTimer_Tick(object sender, EventArgs e)
-        {
-            // Invalidate();
-        }
-        */
     }
 }

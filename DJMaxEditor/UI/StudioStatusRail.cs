@@ -8,6 +8,7 @@ namespace DJMaxEditor.UI
         private string _leftText = "READY";
         private string _centerText = "SNAP 1/8";
         private string _rightText = "NO DOCUMENT";
+        private string _performanceText = "idle";
 
         public StudioStatusRail()
         {
@@ -25,6 +26,17 @@ namespace DJMaxEditor.UI
             _leftText = string.IsNullOrWhiteSpace(left) ? "READY" : left;
             _centerText = string.IsNullOrWhiteSpace(center) ? "SNAP --" : center;
             _rightText = string.IsNullOrWhiteSpace(right) ? "NO DOCUMENT" : right;
+            Invalidate();
+        }
+
+        /// <summary>
+        /// The playback pump readout ("16.7 ms  60 fps"), shown in the rightmost slot
+        /// while the timeline plays. Empty clears the slot; while playback is idle the
+        /// last reading stays, matching the reference project's perf bar.
+        /// </summary>
+        public void SetPerformance(string performance)
+        {
+            _performanceText = performance ?? string.Empty;
             Invalidate();
         }
 
@@ -56,8 +68,22 @@ namespace DJMaxEditor.UI
                     new RectangleF(bounds.Width * 0.38f, 3, bounds.Width * 0.24f, bounds.Height - 3), format);
 
                 format.Alignment = StringAlignment.Far;
+                bool hasPerformance = _performanceText.Length > 0;
+                float rightLeft = hasPerformance ? bounds.Width * 0.60f : bounds.Width * 0.62f;
+                float rightWidth = (hasPerformance ? bounds.Width * 0.20f : bounds.Width * 0.38f) - 12;
                 e.Graphics.DrawString(_rightText, Font, text,
-                    new RectangleF(bounds.Width * 0.62f, 3, bounds.Width * 0.38f - 12, bounds.Height - 3), format);
+                    new RectangleF(rightLeft, 3, rightWidth, bounds.Height - 3), format);
+
+                if (hasPerformance)
+                {
+                    using (var perfBrush = new SolidBrush(StudioDesignSystem.PulseCyan))
+                    {
+                        e.Graphics.DrawString(_performanceText, Font, perfBrush,
+                            new RectangleF(bounds.Width * 0.80f, 3,
+                                bounds.Width * 0.20f - 12, bounds.Height - 3),
+                            format);
+                    }
+                }
             }
         }
     }

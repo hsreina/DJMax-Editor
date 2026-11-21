@@ -13,6 +13,8 @@
     <PlatformTarget>x86</PlatformTarget>
     <AssemblyName>DJMaxEditor.Tests</AssemblyName>
     <RootNamespace>DJMaxEditor.Tests</RootNamespace>
+    <EditorAssemblyPath Condition="'$(EditorAssemblyPath)' == '' and Exists('..\DJMaxEditor\bin\Release\DJMaxEditor.exe')">..\DJMaxEditor\bin\Release\DJMaxEditor.exe</EditorAssemblyPath>
+    <EditorAssemblyPath Condition="'$(EditorAssemblyPath)' == '' and Exists('..\DJMaxEditor\bin\Debug\DJMaxEditor.exe')">..\DJMaxEditor\bin\Debug\DJMaxEditor.exe</EditorAssemblyPath>
     <EditorAssemblyPath Condition="'$(EditorAssemblyPath)' == ''">..\DJMaxEditor\bin\Release\DJMaxEditor.exe</EditorAssemblyPath>
     <LangVersion>7.3</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>

@@ -36,9 +36,15 @@ namespace DJMaxEditor.Editor
                 if (_document != null)
                 {
                     _document.Model.CurrentTick = value / DJMax.EventData.VirtualTickSize;
-                    _editor.Redraw();
+                    _editor.SetPlayheadPosition(value);
                 }
             }
+        }
+
+        public double PlayheadPositionVirtualTick
+        {
+            get { return _editor.PlayheadPositionVirtualTick; }
+            set { _editor.SetPlayheadPosition(value); }
         }
 
         public void Bind(EditorDocumentContext document)

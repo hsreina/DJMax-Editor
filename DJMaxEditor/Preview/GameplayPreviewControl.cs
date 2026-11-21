@@ -1,12 +1,15 @@
 using System;
 using System.Drawing;
 using System.Drawing.Drawing2D;
+using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows.Forms;
-using DJMaxEditor.Controls.TimelineV2;
-using DJMaxEditor.Controls.TimelineV2.Renderers;
+using DJMaxEditor.DJMax;
 using DJMaxEditor.Editor;
+using DJMaxEditor.Files.Tech;
 using DJMaxEditor.UI;
+using DJMaxEditor.Video;
 
 namespace DJMaxEditor.Preview
 {
@@ -16,7 +19,15 @@ namespace DJMaxEditor.Preview
         private GameplayPreviewProjection _projection;
         private GameplayPreviewFrame _frame;
         private GameplayPreviewProfile _profile = GameplayPreviewProfile.Generic;
-        private float _noteZoom = 1.35f;
+        private TechnikaScrollDirection _scrollDirection = TechnikaScrollDirection.Clockwise;
+        private float _noteZoom = 1.0f;
+        private readonly TechnikaPlayfieldRenderer _technikaRenderer =
+            new TechnikaPlayfieldRenderer();
+        private readonly BgaPlayer _bga = new BgaPlayer();
+        private readonly BgaClockMap _bgaClock = new BgaClockMap();
+        private bool _bgaEnabled = true;
+        private int _bgaAttachGeneration;
+        private string _bgaPath;
 
         public GameplayPreviewControl()
         {
@@ -30,6 +41,11 @@ namespace DJMaxEditor.Preview
             Dock = DockStyle.Fill;
             MinimumSize = new Size(320, 220);
             TabStop = true;
+
+            // The persisted sprite style applies from construction so the preview draws the
+            // owner's chosen set before any document is bound; the form's dropdown re-sends
+            // the same id harmlessly when it initialises.
+            SpriteStyleId = FeatureFlags.PreviewSpriteStyleId;
         }
 
         public EditorDocumentContext Document
@@ -42,6 +58,103 @@ namespace DJMaxEditor.Preview
             get { return _profile; }
         }
 
+        /// <summary>
+        /// The TECHNIKA scroll-direction effector. Changing it re-projects the chart -
+        /// note positions, scanlines, hold bodies and the approach glow all read the one
+        /// direction - so it rebuilds the projection like a profile change does.
+        /// </summary>
+        public TechnikaScrollDirection ScrollDirection
+        {
+            get { return _scrollDirection; }
+            set
+            {
+                if (_scrollDirection == value) return;
+                _scrollDirection = value;
+                RebuildProjection();
+            }
+        }
+
+        /// <summary>The note-series effector (fade in / fade out), applied per paint from
+        /// each note's distance to the sweep.</summary>
+        internal TechnikaNoteFader NoteFader
+        {
+            get { return _technikaRenderer.NoteFader; }
+            set
+            {
+                if (_technikaRenderer.NoteFader == value) return;
+                _technikaRenderer.NoteFader = value;
+                Invalidate();
+            }
+        }
+
+        /// <summary>The timeline-series effector (blink / blind), applied per paint from
+        /// the frame's musical phase.</summary>
+        internal TechnikaLineEffector LineEffector
+        {
+            get { return _technikaRenderer.LineEffector; }
+            set
+            {
+                if (_technikaRenderer.LineEffector == value) return;
+                _technikaRenderer.LineEffector = value;
+                Invalidate();
+            }
+        }
+
+        /// <summary>"ARCADE SPRITES" or "PACKAGED GLYPHS" - which note set the TECHNIKA
+        /// playfield resolved, for the panel header. A named style reports its own name
+        /// (<c>T3 STAR #03</c>) instead.</summary>
+        internal string SpriteSourceLabel
+        {
+            get { return _technikaRenderer.SpriteSourceLabel; }
+        }
+
+        /// <summary>
+        /// The SPRITE SET choice, as a catalog style id. Resolving goes through the catalog
+        /// rather than straight to the renderer so a persisted id that no longer matches
+        /// anything on disk falls back to the same answer AUTO would give, instead of
+        /// failing or rendering nothing.
+        /// </summary>
+        internal string SpriteStyleId
+        {
+            set
+            {
+                TechnikaSpriteStyle style = TechnikaSpriteCatalog.Resolve(value);
+                if (_technikaRenderer.SetSpriteStyle(style))
+                {
+                    Invalidate();
+                }
+            }
+        }
+
+        /// <summary>The SPRITE SET choice when the caller already holds the resolved catalog
+        /// entry (startup selection, catalog rebuild). Skips the persisted-id re-probe the
+        /// setter above performs; sheets load lazily at the next paint.</summary>
+        internal void ApplySpriteStyle(TechnikaSpriteStyle style)
+        {
+            if (_technikaRenderer.SetSpriteStyle(style))
+            {
+                Invalidate();
+            }
+        }
+
+        /// <summary>The dropdown pick: the chosen set was decoded and pre-warmed on a loader
+        /// thread, so this is the cheap swap. A no-op when the id is unchanged.</summary>
+        internal void ApplySpriteStyle(TechnikaSpriteStyle style, TechnikaNoteSprites sprites)
+        {
+            if (_technikaRenderer.SetSpriteStyle(style, sprites))
+            {
+                Invalidate();
+            }
+        }
+
+        /// <summary>The playback position the current frame was built at, or 0 before a
+        /// document is bound. Surfaced in the header status line, which is where the
+        /// floating overlay used to draw it.</summary>
+        internal int CurrentTick
+        {
+            get { return _frame == null ? 0 : _frame.CurrentTick; }
+        }
+
         public float NoteZoom
         {
             get { return _noteZoom; }
@@ -51,6 +164,26 @@ namespace DJMaxEditor.Preview
                 Invalidate();
             }
         }
+
+        /// <summary>
+        /// The chart's scroll speed as a SWEEP-rate multiplier: notes never move
+        /// from their authored scan positions; the scanline crosses the field at
+        /// this many times the musical rate (BYTES attribute 1 = half, 2 = double).
+        /// Hit states, the hit flash and the approach glow measure from the sweep,
+        /// so they follow the faster line.
+        /// </summary>
+        public double ScrollSpeed
+        {
+            get { return _scrollSpeed; }
+            set
+            {
+                double clamped = Math.Max(0.25, Math.Min(4.0, value));
+                if (Math.Abs(_scrollSpeed - clamped) < 1e-9) return;
+                _scrollSpeed = clamped;
+                RefreshPlayback();
+            }
+        }
+        private double _scrollSpeed = 1.0;
 
         public string ProjectionStatus
         {
@@ -66,6 +199,38 @@ namespace DJMaxEditor.Preview
         {
             get { return _projection == null ? 0 : _projection.Diagnostics.Count; }
         }
+
+        /// <summary>When true and a video is loaded, the BGA paints under the playfield notes.</summary>
+        public bool BgaEnabled
+        {
+            get { return _bgaEnabled; }
+            set
+            {
+                if (_bgaEnabled == value)
+                {
+                    return;
+                }
+                _bgaEnabled = value;
+                Invalidate();
+            }
+        }
+
+        public bool BgaIsOpen
+        {
+            get { return _bga.IsOpen; }
+        }
+
+        public string BgaStatusText
+        {
+            get { return _bga.StatusText; }
+        }
+
+        public string BgaPath
+        {
+            get { return _bgaPath; }
+        }
+
+        public event EventHandler BgaChanged;
 
         public void Bind(EditorDocumentContext document)
         {
@@ -84,6 +249,7 @@ namespace DJMaxEditor.Preview
                 _document.UndoManager.OnUndoRedo += DocumentUndoRedo;
             }
             RebuildProjection();
+            AttachBgaForDocument(document);
         }
 
         public void SetProfile(GameplayPreviewProfile profile)
@@ -106,18 +272,90 @@ namespace DJMaxEditor.Preview
             }
             else
             {
-                _frame = _projection.CreateRenderableFrame(_document.Model.CurrentTick);
+                _frame = _projection.CreateRenderableFrame(
+                    _document.Model.CurrentTick, _scrollSpeed);
             }
+            SyncBga();
             Invalidate();
+        }
+
+        /// <summary>Opens a BGA file for the backdrop. Returns false when the decoder rejects it.</summary>
+        public async Task<bool> LoadBgaAsync(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+
+            _bgaPath = path;
+            int generation = ++_bgaAttachGeneration;
+            string playable = path;
+
+            if (BgaSourceResolver.RequiresTranscode(path))
+            {
+                string resolved = null;
+                string failure = null;
+                await Task.Run(() =>
+                {
+                    if (!BgaSourceResolver.TryResolve(path, out resolved, out failure))
+                    {
+                        resolved = null;
+                    }
+                }).ConfigureAwait(true);
+
+                if (generation != _bgaAttachGeneration)
+                {
+                    return false;
+                }
+
+                if (resolved == null)
+                {
+                    Logs.Write("BGA: transcode failed: {0} for {1}", failure, path);
+                    RaiseBgaChanged();
+                    return false;
+                }
+
+                playable = resolved;
+            }
+
+            if (generation != _bgaAttachGeneration)
+            {
+                return false;
+            }
+
+            string error;
+            bool ok = _bga.TryOpen(playable, out error);
+            if (!ok)
+            {
+                Logs.Write("BGA: open failed: {0} for {1}", error, playable);
+            }
+            SyncBga();
+            Invalidate();
+            RaiseBgaChanged();
+            return ok;
+        }
+
+        public void ClearBga()
+        {
+            _bgaAttachGeneration++;
+            _bgaPath = null;
+            _bga.Clear();
+            _bgaClock.Clear();
+            Invalidate();
+            RaiseBgaChanged();
         }
 
         protected override void Dispose(bool disposing)
         {
-            if (disposing && _document != null)
+            if (disposing)
             {
-                _document.Model.Tracks.EventAdded -= ChartTopologyChanged;
-                _document.Model.Tracks.EventRemoved -= ChartTopologyChanged;
-                _document.UndoManager.OnUndoRedo -= DocumentUndoRedo;
+                if (_document != null)
+                {
+                    _document.Model.Tracks.EventAdded -= ChartTopologyChanged;
+                    _document.Model.Tracks.EventRemoved -= ChartTopologyChanged;
+                    _document.UndoManager.OnUndoRedo -= DocumentUndoRedo;
+                }
+                _bga.Dispose();
             }
             base.Dispose(disposing);
         }
@@ -135,6 +373,8 @@ namespace DJMaxEditor.Preview
             graphics.SmoothingMode = SmoothingMode.AntiAlias;
             graphics.Clear(StudioDesignSystem.Void);
 
+            bool showBga = _bgaEnabled && _bga.IsOpen && _bga.CurrentBitmap != null;
+
             Rectangle viewport = ClientRectangle;
             viewport.Inflate(-12, -12);
             if (viewport.Width <= 0 || viewport.Height <= 0) return;
@@ -147,31 +387,216 @@ namespace DJMaxEditor.Preview
 
             if (_projection.Profile == GameplayPreviewProfile.Technika)
             {
-                DrawTechnikaFrame(graphics, viewport);
+                _technikaRenderer.Paint(
+                    graphics, viewport, _projection, _frame, _noteZoom,
+                    showBga ? _bga.CurrentBitmap : null,
+                    showBga);
             }
             else
             {
+                if (showBga)
+                {
+                    DrawGenericBga(graphics, viewport, _bga.CurrentBitmap);
+                }
                 DrawGenericFrame(graphics, viewport);
             }
-            DrawOverlay(graphics, viewport);
+        }
+
+        private void AttachBgaForDocument(EditorDocumentContext document)
+        {
+            _bgaAttachGeneration++;
+            _bga.Clear();
+            _bgaPath = null;
+            _bgaClock.Clear();
+
+            if (document == null || document.Model == null)
+            {
+                RaiseBgaChanged();
+                return;
+            }
+
+            ReloadBgaClock(document.Model);
+
+            string discovered = DiscoverBgaPath(document);
+            if (!string.IsNullOrEmpty(discovered))
+            {
+                _ = LoadBgaAsync(discovered);
+            }
+            else
+            {
+                RaiseBgaChanged();
+            }
+        }
+
+        private void SyncBga()
+        {
+            if (!_bgaEnabled || !_bga.IsOpen || _document == null || _document.Model == null)
+            {
+                return;
+            }
+
+            // Prefer the document playhead: VirtualCurrentTick is the same source the
+            // timeline and VideoStart marker share. Frame.CurrentTick is a rounded native
+            // copy of that value and must not drift the BGA relative to the cue.
+            int virtualTick = _document.Model.VirtualCurrentTick;
+            _bga.Seek(_bgaClock.TimeForVirtualTick(virtualTick));
+        }
+
+        private void ReloadBgaClock(PlayerData model)
+        {
+            _bgaClock.Clear();
+            if (model == null)
+            {
+                return;
+            }
+
+            _bgaClock.Load(model);
+            _bgaClock.Offset = ResolveBgaOffset(model, _bgaClock);
+        }
+
+        private void RaiseBgaChanged()
+        {
+            EventHandler handler = BgaChanged;
+            if (handler != null)
+            {
+                handler(this, EventArgs.Empty);
+            }
+        }
+
+        private static string DiscoverBgaPath(EditorDocumentContext document)
+        {
+            if (document == null)
+            {
+                return null;
+            }
+
+            PlayerData model = document.Model;
+            TechMetadata tech = model != null ? model.TechMetadata : null;
+            if (tech != null && !string.IsNullOrEmpty(tech.Bga) &&
+                !string.IsNullOrEmpty(document.SourcePath))
+            {
+                try
+                {
+                    string folder = Path.GetDirectoryName(document.SourcePath);
+                    string candidate = Path.Combine(folder ?? string.Empty, tech.Bga);
+                    if (File.Exists(candidate))
+                    {
+                        return candidate;
+                    }
+                }
+                catch (Exception)
+                {
+                }
+            }
+
+            return BgaSourceResolver.FindForChart(document.SourcePath);
+        }
+
+        /// <summary>
+        /// TECHMANIA <c>bgaOffset</c> delays (+) / advances (-) the video. When the chart
+        /// already carries an Attr-100 VideoStart (including the one tech import drops on
+        /// track 17 at bgaOffset ticks), that marker alone owns sync — applying Offset on
+        /// top double-shifts the picture.
+        /// </summary>
+        private static TimeSpan ResolveBgaOffset(PlayerData model, BgaClockMap clock)
+        {
+            if (clock != null && clock.HasVideoStartMarker)
+            {
+                return TimeSpan.Zero;
+            }
+
+            if (model == null || model.TechMetadata == null)
+            {
+                return TimeSpan.Zero;
+            }
+
+            double seconds = model.TechMetadata.BgaOffset;
+            if (double.IsNaN(seconds) || double.IsInfinity(seconds) || seconds == 0.0)
+            {
+                return TimeSpan.Zero;
+            }
+
+            // TimeForVirtualTick adds Offset; positive bgaOffset must delay → negate.
+            return TimeSpan.FromSeconds(-seconds);
+        }
+
+        private static void DrawGenericBga(Graphics graphics, Rectangle viewport, Image frame)
+        {
+            if (frame == null)
+            {
+                return;
+            }
+
+            RectangleF dest = Cover(viewport, frame.Width, frame.Height);
+            if (dest.Width < 1f || dest.Height < 1f)
+            {
+                return;
+            }
+
+            var previous = graphics.InterpolationMode;
+            graphics.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            GraphicsState clip = graphics.Save();
+            graphics.SetClip(viewport);
+            graphics.DrawImage(frame, dest);
+            graphics.Restore(clip);
+            using (var dim = new SolidBrush(Color.FromArgb(180, 0, 0, 0)))
+            {
+                graphics.FillRectangle(dim, viewport);
+            }
+            graphics.InterpolationMode = previous;
+        }
+
+        private static RectangleF Cover(Rectangle bounds, int pixelWidth, int pixelHeight)
+        {
+            if (pixelWidth <= 0 || pixelHeight <= 0 || bounds.Width <= 0 || bounds.Height <= 0)
+            {
+                return RectangleF.Empty;
+            }
+
+            float scale = Math.Max(
+                (float)bounds.Width / pixelWidth,
+                (float)bounds.Height / pixelHeight);
+            float width = pixelWidth * scale;
+            float height = pixelHeight * scale;
+            return new RectangleF(
+                bounds.X + ((bounds.Width - width) / 2f),
+                bounds.Y + ((bounds.Height - height) / 2f),
+                width,
+                height);
         }
 
         private void RebuildProjection()
         {
+            // Re-probe for sprites an owner may have dropped in since startup; a changed set
+            // is worth a repaint even when the projection itself is unchanged.
+            if (_technikaRenderer.ReloadSprites())
+            {
+                Invalidate();
+            }
             _projection = _document == null
                 ? null
-                : GameplayPreviewProjector.Project(_document.Model, _profile);
+                : GameplayPreviewProjector.Project(_document.Model, _profile, _scrollDirection);
             RefreshPlayback();
         }
 
         private void ChartTopologyChanged(object sender, EventArgs e)
         {
             RebuildProjection();
+            if (_document != null)
+            {
+                ReloadBgaClock(_document.Model);
+                SyncBga();
+            }
         }
 
         private void DocumentUndoRedo(object sender, UndoManager.Action action)
         {
             RebuildProjection();
+            if (_document != null)
+            {
+                ReloadBgaClock(_document.Model);
+                SyncBga();
+            }
         }
 
         private void DrawEmptyState(Graphics graphics, Rectangle viewport)
@@ -189,50 +614,6 @@ namespace DJMaxEditor.Preview
                     muted,
                     viewport.Left + 18,
                     viewport.Top + 54);
-            }
-        }
-
-        private void DrawTechnikaFrame(Graphics graphics, Rectangle viewport)
-        {
-            int middle = viewport.Top + viewport.Height / 2;
-            Rectangle top = new Rectangle(
-                viewport.Left, viewport.Top, viewport.Width, viewport.Height / 2);
-            Rectangle bottom = new Rectangle(
-                viewport.Left, middle, viewport.Width, viewport.Bottom - middle);
-
-            using (var topBrush = new SolidBrush(StudioDesignSystem.Deck))
-            using (var bottomBrush = new SolidBrush(Color.FromArgb(18, 28, 42)))
-            using (var border = new Pen(StudioDesignSystem.Border))
-            using (var lanePen = new Pen(Color.FromArgb(100, StudioDesignSystem.Border)))
-            {
-                graphics.FillRectangle(topBrush, top);
-                graphics.FillRectangle(bottomBrush, bottom);
-                graphics.DrawRectangle(border, viewport);
-                graphics.DrawLine(border, viewport.Left, middle, viewport.Right, middle);
-                DrawLaneGrid(graphics, top, _projection.LaneCount, lanePen);
-                DrawLaneGrid(graphics, bottom, _projection.LaneCount, lanePen);
-            }
-
-            foreach (ProjectedGameplayNote note in _frame.Notes)
-            {
-                if (note.State == GameplayPreviewNoteState.Resolved ||
-                    note.State == GameplayPreviewNoteState.Inactive)
-                {
-                    continue;
-                }
-                DrawTechnikaNote(graphics, viewport, note);
-            }
-
-            bool topScan = (_frame.CurrentIntScan & 1) == 1;
-            double scanBase = 0.15 + 0.75 * _frame.CurrentPhase;
-            double scanX = topScan ? scanBase : 1.0 - scanBase;
-            int x = viewport.Left + (int)Math.Round(scanX * viewport.Width);
-            Rectangle half = topScan ? top : bottom;
-            using (var glow = new Pen(Color.FromArgb(62, StudioDesignSystem.PulseCyan), 7f))
-            using (var scan = new Pen(StudioDesignSystem.PulseCyan, 2f))
-            {
-                graphics.DrawLine(glow, x, half.Top + 1, x, half.Bottom - 1);
-                graphics.DrawLine(scan, x, half.Top + 1, x, half.Bottom - 1);
             }
         }
 
@@ -282,161 +663,6 @@ namespace DJMaxEditor.Preview
             {
                 int y = rectangle.Top + (rectangle.Height * lane / lanes);
                 graphics.DrawLine(pen, rectangle.Left, y, rectangle.Right, y);
-            }
-        }
-
-        private void DrawTechnikaNote(
-            Graphics graphics,
-            Rectangle viewport,
-            ProjectedGameplayNote note)
-        {
-            int x = viewport.Left + (int)Math.Round(note.X * viewport.Width);
-            int y = viewport.Top + (int)Math.Round(note.Y * viewport.Height);
-            int lanePixels = Math.Max(12,
-                viewport.Height / (2 * Math.Max(1, _projection.LaneCount)));
-            int size = Math.Max(10,
-                (int)Math.Round(lanePixels * 0.62f * _noteZoom));
-            int alpha = note.State == GameplayPreviewNoteState.Prepare ? 150 : 240;
-            Color color = NoteColor(note.Kind);
-
-            if (note.ApproachVisible)
-            {
-                int ringSize = size + (int)Math.Round((1.0 - note.ApproachProgress) * size * 1.6);
-                using (var ring = new Pen(Color.FromArgb(140, color), 2f))
-                {
-                    graphics.DrawEllipse(
-                        ring,
-                        x - ringSize / 2,
-                        y - ringSize / 2,
-                        ringSize,
-                        ringSize);
-                }
-            }
-
-            if (note.DurationPulse > 30 &&
-                note.Kind != GameplayPreviewNoteKind.Basic &&
-                note.Kind != GameplayPreviewNoteKind.ChainHead &&
-                note.Kind != GameplayPreviewNoteKind.ChainNode)
-            {
-                int trail = Math.Max(size, Math.Min(viewport.Width / 3,
-                    note.DurationPulse * viewport.Width / (960 * 2)));
-                int direction = note.IsTopHalf ? 1 : -1;
-                using (var trailBrush = new SolidBrush(Color.FromArgb(alpha / 2, color)))
-                {
-                    graphics.FillRectangle(
-                        trailBrush,
-                        direction > 0 ? x : x - trail,
-                        y - Math.Max(2, size / 6),
-                        trail,
-                        Math.Max(4, size / 3));
-                }
-            }
-
-            using (var glow = new SolidBrush(Color.FromArgb(48, color)))
-            {
-                graphics.FillEllipse(glow,
-                    x - size, y - size, size * 2, size * 2);
-            }
-
-            bool drewAuthenticArt = TechnikaNoteArt.TryDraw(
-                graphics,
-                ToTechnikaKind(note.Kind),
-                x,
-                y,
-                size + 4,
-                alpha / 255f);
-            if (!drewAuthenticArt)
-            {
-                using (var body = new SolidBrush(Color.FromArgb(alpha, color)))
-                using (var edge = new Pen(StudioDesignSystem.Frost, 1.25f))
-                {
-                    graphics.FillEllipse(body,
-                        x - size / 2, y - size / 2, size, size);
-                    graphics.DrawEllipse(edge,
-                        x - size / 2, y - size / 2, size, size);
-                }
-            }
-        }
-
-        private static TechnikaNoteKind ToTechnikaKind(GameplayPreviewNoteKind kind)
-        {
-            switch (kind)
-            {
-                case GameplayPreviewNoteKind.Basic:
-                    return TechnikaNoteKind.Basic;
-                case GameplayPreviewNoteKind.Drag:
-                    return TechnikaNoteKind.Drag;
-                case GameplayPreviewNoteKind.ChainHead:
-                    return TechnikaNoteKind.ChainHead;
-                case GameplayPreviewNoteKind.ChainNode:
-                    return TechnikaNoteKind.ChainNode;
-                case GameplayPreviewNoteKind.RepeatHead:
-                    return TechnikaNoteKind.RepeatHead;
-                case GameplayPreviewNoteKind.RepeatHeadHold:
-                    return TechnikaNoteKind.RepeatHeadHold;
-                case GameplayPreviewNoteKind.Repeat:
-                    return TechnikaNoteKind.Repeat;
-                case GameplayPreviewNoteKind.RepeatHold:
-                    return TechnikaNoteKind.RepeatHold;
-                case GameplayPreviewNoteKind.Hold:
-                    return TechnikaNoteKind.Hold;
-                default:
-                    return TechnikaNoteKind.Unknown;
-            }
-        }
-
-        private void DrawOverlay(Graphics graphics, Rectangle viewport)
-        {
-            string diagnostics = DiagnosticCount == 0
-                ? "NO PROJECTION WARNINGS"
-                : DiagnosticCount + " PROJECTION WARNING" +
-                    (DiagnosticCount == 1 ? string.Empty : "S");
-            using (var panel = new SolidBrush(Color.FromArgb(225, StudioDesignSystem.Void)))
-            using (var status = StudioDesignSystem.UtilityFont(7.5f))
-            using (var statusBrush = new SolidBrush(StudioDesignSystem.Frost))
-            using (var detailBrush = new SolidBrush(
-                DiagnosticCount == 0
-                    ? StudioDesignSystem.Muted
-                    : StudioDesignSystem.SignalAmber))
-            {
-                var box = new Rectangle(
-                    viewport.Left + 10,
-                    viewport.Top + 10,
-                    Math.Min(viewport.Width - 20, 455),
-                    44);
-                graphics.FillRectangle(panel, box);
-                graphics.DrawString(
-                    _projection.StatusLabel,
-                    status,
-                    statusBrush,
-                    box.Left + 10,
-                    box.Top + 7);
-                graphics.DrawString(
-                    "TICK " + _frame.CurrentTick + "  |  " + diagnostics,
-                    status,
-                    detailBrush,
-                    box.Left + 10,
-                    box.Top + 24);
-            }
-        }
-
-        private static Color NoteColor(GameplayPreviewNoteKind kind)
-        {
-            switch (kind)
-            {
-                case GameplayPreviewNoteKind.ChainHead:
-                case GameplayPreviewNoteKind.ChainNode:
-                    return StudioDesignSystem.AutomationGreen;
-                case GameplayPreviewNoteKind.RepeatHead:
-                case GameplayPreviewNoteKind.RepeatHeadHold:
-                case GameplayPreviewNoteKind.Repeat:
-                case GameplayPreviewNoteKind.RepeatHold:
-                    return StudioDesignSystem.BeatViolet;
-                case GameplayPreviewNoteKind.Hold:
-                case GameplayPreviewNoteKind.Drag:
-                    return StudioDesignSystem.SignalAmber;
-                default:
-                    return StudioDesignSystem.PulseCyan;
             }
         }
     }

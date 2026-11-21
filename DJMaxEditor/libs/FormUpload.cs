@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -67,7 +67,7 @@ namespace DJMaxEditor.libs
 
             try {
                 response = request.GetResponse() as HttpWebResponse;
-            } catch (Exception e) {
+            } catch (Exception) {
                 return null;    
             }
             

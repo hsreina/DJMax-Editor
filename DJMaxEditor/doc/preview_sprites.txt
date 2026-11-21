@@ -1,0 +1,82 @@
+GAMEPLAY PREVIEW - SPRITE SET
+=============================
+
+The Gameplay Preview's SPRITE SET dropdown (header of the preview tool
+window) chooses which note art the TECHNIKA playfield draws:
+
+  AUTO               The classic behaviour: first local source found wins
+                     (see resolution order below), packaged glyphs as the
+                     fallback. Nothing changes for existing setups.
+  TECHNIKA 2 (LOCAL) The legacy single-root source: the
+                     DJMAX_EDITOR_TECHNIKA_ASSETS environment variable or
+                     <exe>\LocalAssets\Technika2.
+  T3 STAR #00..#12   The numbered star sets of a Technika 3 MainGame tree.
+  T3 POP #00..#12    The numbered pop sets of the same tree.
+  <FOLDER>           Any other folder dropped into <exe>\LocalAssets under
+                     its own name - a flat skin folder, a numbered pack, or
+                     a MainGame mirror (see below).
+  PACKAGED           The arcade sheets compiled into the editor itself.
+                     Always available, always last.
+
+The choice is persisted across sessions (user setting PreviewSpriteStyle,
+stored as a stable style id such as "t3:star:3"). If the id no longer
+resolves - the folder was deleted, the game uninstalled, the settings file
+copied to a machine without the data - it falls back to what AUTO would
+have picked. The profile and effector choices next to it remain
+session-only.
+
+The small "..." button beside the dropdown points the probe at a Technika 3
+install the automatic search did not find (any folder inside the
+Resource\MainGame tree works; the MainGame root is found automatically).
+The picked folder is stored in the Technika3AssetPath user setting.
+
+Technika 3 root resolution order
+--------------------------------
+1. The Technika3AssetPath user setting (set via the "..." button).
+2. The DJMAX_EDITOR_TECHNIKA_ASSETS environment variable, when it points
+   inside a MainGame tree (e.g. at note\star\3 - the root is found by
+   climbing the tree).
+3. Automatic detection: for every drive letter X:, the first
+   X:\SteamLibrary\steamapps\common\DJMax Technika 3*\Resource\MainGame
+   that exists.
+4. <exe>\LocalAssets\Technika3 - a portable mirror (see below).
+
+Everything is read-only; no files outside the editor's own folder are ever
+written. CoolBomb hit effects resolve from CoolBomb\<set>\cool beside the
+chosen note set, so each skin gets its own burst.
+
+Mirroring a Technika 3 tree for portability
+------------------------------------------
+Copy Resource\MainGame from the arcade install to
+<exe>\LocalAssets\Technika3 (i.e. next to DJMaxEditor.exe), keeping the
+tree shape:
+
+  LocalAssets\Technika3\note\star\0\Note_Basic.png ...
+  LocalAssets\Technika3\note\pop\0\Note_Basic.png ...
+  LocalAssets\Technika3\CoolBomb\0\cool\cool_0000.png ...
+
+Only the folders the preview draws are needed: note\star\<n>, note\pop\<n>
+and CoolBomb\<n>\cool. A mirrored tree is picked up automatically by the
+same code path as the real install; the Technika3AssetPath setting or the
+environment variable overrides it when both exist.
+
+LocalAssets folders under any name
+----------------------------------
+The folder scan does not care what a sprite folder is called - only the
+classic names Technika2 and Technika3 are reserved (claimed by the legacy
+source and the portable mirror above). Any other folder directly inside
+<exe>\LocalAssets is adopted automatically, in name order:
+
+  LocalAssets\MySkin\Note_Basic.png ...          one style named MYSKIN
+  LocalAssets\MyPack\0\Note_Basic.png ...        one style per numbered
+  LocalAssets\MyPack\2\Note_Basic.png ...        set: MYPACK #00, MYPACK #02
+  LocalAssets\Mirror\note\star\1\ ...            MainGame mirror: MIRROR
+  LocalAssets\Mirror\note\pop\0\ ...             STAR #01, MIRROR POP #00
+
+A folder holding sheets but no Note_Basic.png, and a numbered child without
+the tap sheet, is skipped - a style the renderer cannot draw is not offered.
+CoolBomb hit effects still resolve by walking up from the chosen note set,
+so MyPack\CoolBomb\2\cool or a shared LocalAssets\CoolBomb\2\cool both work.
+
+The persisted id encodes the folder name ("local:MyPack:2"), so renaming
+the folder afterwards falls back to AUTO until the id is picked again.

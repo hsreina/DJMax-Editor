@@ -41,13 +41,14 @@ namespace DJMaxEditor {
             // 
             this.SoundList.AllowUserToAddRows = false;
             this.SoundList.AllowUserToDeleteRows = false;
-            this.SoundList.AllowUserToResizeColumns = false;
+            this.SoundList.AllowUserToResizeColumns = true;
             this.SoundList.AllowUserToResizeRows = false;
             this.SoundList.AutoSizeColumnsMode = System.Windows.Forms.DataGridViewAutoSizeColumnsMode.Fill;
             this.SoundList.BorderStyle = System.Windows.Forms.BorderStyle.None;
             this.SoundList.CellBorderStyle = System.Windows.Forms.DataGridViewCellBorderStyle.None;
-            this.SoundList.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.SoundList.ColumnHeadersVisible = false;
+            this.SoundList.ColumnHeadersHeight = 22;
+            this.SoundList.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.DisableResizing;
+            this.SoundList.ColumnHeadersVisible = true;
             this.SoundList.ContextMenuStrip = this.contextMenuStrip1;
             this.SoundList.Dock = System.Windows.Forms.DockStyle.Fill;
             this.SoundList.EditMode = System.Windows.Forms.DataGridViewEditMode.EditProgrammatically;
@@ -58,7 +59,7 @@ namespace DJMaxEditor {
             this.SoundList.ReadOnly = true;
             this.SoundList.RowHeadersBorderStyle = System.Windows.Forms.DataGridViewHeaderBorderStyle.None;
             this.SoundList.RowHeadersVisible = false;
-            this.SoundList.RowTemplate.Height = 28;
+            this.SoundList.RowTemplate.Height = 22;
             this.SoundList.ScrollBars = System.Windows.Forms.ScrollBars.Vertical;
             this.SoundList.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
             this.SoundList.Size = new System.Drawing.Size(220, 457);

@@ -10,8 +10,11 @@ namespace DJMaxEditor.Controls.Editor.Renderers.Zones.Technika
             DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.Red, "P1 notes special", 4, 7);
             DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, CustomBrushes.Player2Visible, "P2 Visible", 8, 11);
             DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.Azure, "P2 notes special", 12, 15);
-            // Can add track 16 for main audio
-            // Can add track 17 for video
+            DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.Orange, "BGM", 16, 16);
+            DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.MediumPurple, "BGA", 17, 17);
+            DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.Teal, "Speed", 18, 18);
+            DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.SlateGray, "Soundtrack", 19, 19);
+            DrawZone(g, trackIndex, trackX, trackY, width, height, bounds, Brushes.DarkOliveGreen, "Keysound", 20, 63);
         }
 
         public override string GetName()

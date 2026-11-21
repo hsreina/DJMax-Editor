@@ -11,11 +11,8 @@ namespace DJMaxEditor.UI
         private const int ToolbarIconSize = 18;
 
         private readonly Label _documentLabel;
-        private readonly Label _formatChip;
-        private readonly Label _capabilityChip;
         private readonly Button _timelineV1;
         private readonly Button _timelineV2;
-        private readonly Button _preview;
         private readonly Button _workspace;
         private readonly Button _palette;
         private readonly ContextMenuStrip _workspaceMenu;
@@ -105,19 +102,14 @@ namespace DJMaxEditor.UI
             _documentLabel.AutoEllipsis = true;
             _documentLabel.Font = StudioDesignSystem.BodyFont(9f, FontStyle.Bold);
 
-            _formatChip = CreateChip("NO SOURCE", StudioDesignSystem.Muted);
-            _capabilityChip = CreateChip("OPEN A CHART", StudioDesignSystem.SignalAmber);
-
             _timelineV1 = CreateRailButton("TIMELINE V1");
             _timelineV2 = CreateRailButton("TIMELINE V2");
-            _preview = CreateRailButton("PREVIEW");
             _workspace = CreateRailButton("WORKSPACE  ▾");
             _palette = CreateRailButton("COMMANDS  Ctrl+K");
             _workspaceMenu = BuildWorkspaceMenu();
 
             _timelineV1.Click += delegate { if (TimelineV1Requested != null) TimelineV1Requested(this, EventArgs.Empty); };
             _timelineV2.Click += delegate { if (TimelineV2Requested != null) TimelineV2Requested(this, EventArgs.Empty); };
-            _preview.Click += delegate { if (PreviewRequested != null) PreviewRequested(this, EventArgs.Empty); };
             _workspace.Click += delegate
             {
                 _workspaceMenu.Show(_workspace, new Point(0, _workspace.Height));
@@ -137,11 +129,8 @@ namespace DJMaxEditor.UI
                 WrapContents = false
             };
             right.Controls.Add(_zoomButton);
-            right.Controls.Add(_formatChip);
-            right.Controls.Add(_capabilityChip);
             right.Controls.Add(_timelineV1);
             right.Controls.Add(_timelineV2);
-            right.Controls.Add(_preview);
             right.Controls.Add(_workspace);
             right.Controls.Add(_palette);
 
@@ -184,7 +173,6 @@ namespace DJMaxEditor.UI
                 return new[]
                 {
                     StudioWorkspacePreset.Editing,
-                    StudioWorkspacePreset.Preview,
                     StudioWorkspacePreset.Compact
                 };
             }
@@ -192,32 +180,18 @@ namespace DJMaxEditor.UI
 
         public string DocumentName { get; private set; }
         public string SurfaceName { get; private set; }
-        public string CapabilityText { get; private set; }
-        public bool IsLocked { get; private set; }
 
         public void ShowEmpty()
         {
-            ShowDocument("NO DOCUMENT", "TIMELINE V1", "NO SOURCE", "OPEN A CHART", true);
+            ShowDocument("NO DOCUMENT", "TIMELINE V1");
         }
 
-        public void ShowDocument(
-            string documentName,
-            string surfaceName,
-            string formatText,
-            string capabilityText,
-            bool isLocked)
+        public void ShowDocument(string documentName, string surfaceName)
         {
             DocumentName = string.IsNullOrWhiteSpace(documentName) ? "UNTITLED" : documentName;
             SurfaceName = string.IsNullOrWhiteSpace(surfaceName) ? "TIMELINE V1" : surfaceName;
-            CapabilityText = string.IsNullOrWhiteSpace(capabilityText) ? "UNKNOWN" : capabilityText;
-            IsLocked = isLocked;
 
             _documentLabel.Text = DocumentName;
-            _formatChip.Text = formatText ?? "UNKNOWN";
-            _capabilityChip.Text = CapabilityText;
-            _capabilityChip.ForeColor = isLocked
-                ? StudioDesignSystem.SignalAmber
-                : StudioDesignSystem.PulseCyan;
             SetActiveSurface(SurfaceName.IndexOf("V2", StringComparison.OrdinalIgnoreCase) >= 0);
         }
 
@@ -340,7 +314,14 @@ namespace DJMaxEditor.UI
                 ShowImageMargin = false
             };
             AddWorkspaceItem(menu, "EDITING", StudioWorkspacePreset.Editing);
-            AddWorkspaceItem(menu, "PREVIEW", StudioWorkspacePreset.Preview);
+            // Former top-rail PREVIEW: open Gameplay Preview (not a layout preset).
+            AddWorkspaceAction(menu, "PREVIEW", delegate
+            {
+                if (PreviewRequested != null)
+                {
+                    PreviewRequested(this, EventArgs.Empty);
+                }
+            });
             AddWorkspaceItem(menu, "COMPACT", StudioWorkspacePreset.Compact);
             return menu;
         }
@@ -350,12 +331,20 @@ namespace DJMaxEditor.UI
             string label,
             StudioWorkspacePreset preset)
         {
+            AddWorkspaceAction(menu, label, delegate { RequestWorkspace(preset); });
+        }
+
+        private static void AddWorkspaceAction(
+            ContextMenuStrip menu,
+            string label,
+            EventHandler onClick)
+        {
             var item = new ToolStripMenuItem(label)
             {
                 BackColor = StudioDesignSystem.Deck,
                 ForeColor = StudioDesignSystem.Frost
             };
-            item.Click += delegate { RequestWorkspace(preset); };
+            item.Click += onClick;
             menu.Items.Add(item);
         }
 
@@ -371,23 +360,6 @@ namespace DJMaxEditor.UI
                 Padding = new Padding(0, 8, 8, 0),
                 Text = text,
                 Width = width
-            };
-        }
-
-        private static Label CreateChip(string text, Color foreground)
-        {
-            return new Label
-            {
-                AutoSize = true,
-                BackColor = StudioDesignSystem.Lift,
-                BorderStyle = BorderStyle.FixedSingle,
-                Font = StudioDesignSystem.BodyFont(8.5f, FontStyle.Bold),
-                ForeColor = foreground,
-                Margin = new Padding(3, 3, 3, 3),
-                MinimumSize = new Size(0, 27),
-                Padding = new Padding(8, 5, 8, 0),
-                Text = text,
-                TextAlign = ContentAlignment.TopCenter
             };
         }
 

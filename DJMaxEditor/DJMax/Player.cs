@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 
 namespace DJMaxEditor.DJMax
@@ -59,7 +59,9 @@ namespace DJMaxEditor.DJMax
             TriggerStatusChange();
         }
 
-        // Play from tick
+        // Play from tick (keysound check / play-from-spot). Events strictly before
+        // the target are applied silently - tempo and volume catch up, notes do not
+        // fire - so seeking mid-chart does not dump every keysound up to that point.
         public void Play(int tick)
         {
             if (false == IsReady)
@@ -69,17 +71,13 @@ namespace DJMaxEditor.DJMax
 
             m_timer.Reset();
             ResetMsTime();
-            if (tick != 0)
-            {
-                m_curTick = tick;
-                UpdateTimer();
-                UpdateAutoPlayEvents();
-            }
-            else
-            {
-                m_curTick = 0;
-                m_curMsTime = 0L;
-            }
+
+            m_curEventIdx = 0;
+            m_curTick = Math.Max(0, tick);
+            m_curTempo = m_playerData?.Tempo ?? 120.0f;
+            SetTempo(m_curTempo);
+            // Integrates wall-clock ms across tempo changes while skipping notes.
+            m_curMsTime = CatchUpToCurrentTick();
 
             IsPaused = false;
             IsStopped = false;
@@ -152,6 +150,26 @@ namespace DJMaxEditor.DJMax
             return m_curTick;
         }
 
+        /// <summary>
+        /// The playhead position including the sub-tick remainder the sequencer already
+        /// carries. <see cref="GetCurrentTick"/> only moves at the sequencer's whole-tick
+        /// rate - tempo * 48 ticks a second, so 48/s at 60 BPM - which is slower than a
+        /// 60 Hz display no matter how often the caller asks. The remainder in
+        /// m_leftMsTime is the part of the elapsed time that has not rounded into a tick
+        /// yet; dividing it by the period in force puts the playhead between ticks, so a
+        /// surface that wants motion finer than the sequencer clock can round it as finely
+        /// as it likes. The playback pump rounds to virtual ticks (six per native tick).
+        /// </summary>
+        public double GetCurrentTickExact()
+        {
+            double fraction = m_period > 0.0 ? m_leftMsTime / m_period : 0.0;
+            if (fraction <= 0.0 || fraction >= 1.0)
+            {
+                return m_curTick;
+            }
+            return m_curTick + fraction;
+        }
+
         // Retrieve the current ms time
         public long GetCurrentMsTime()
         {
@@ -221,6 +239,61 @@ namespace DJMaxEditor.DJMax
 
         private void UpdateAutoPlayEvents()
         {
+            DrainEvents(playNotes: true);
+        }
+
+        /// <summary>
+        /// Advances the event cursor up to <see cref="m_curTick"/> without firing notes.
+        /// Returns the integrated song time in ms at the seek point (tempo-aware).
+        /// </summary>
+        private long CatchUpToCurrentTick()
+        {
+            if (m_playerData == null)
+            {
+                Logs.Write("PlayerData is null");
+                return 0;
+            }
+
+            var events = m_playerData.Tracks.Events;
+            double elapsedMs = 0.0;
+            int lastTick = 0;
+
+            while (m_curEventIdx < events.Count())
+            {
+                var scoreEvent = events[(int)m_curEventIdx];
+                if (scoreEvent == null)
+                {
+                    throw new Exception($"ERROR: bad event idx = {m_curEventIdx}");
+                }
+                if (scoreEvent.Tick > m_curTick)
+                {
+                    break;
+                }
+
+                switch (scoreEvent.EventType)
+                {
+                    case EventType.Note:
+                        // Notes are restored by the shell with a sample offset (BGM).
+                        break;
+                    case EventType.Tempo:
+                        elapsedMs += (scoreEvent.Tick - lastTick) * m_period;
+                        lastTick = scoreEvent.Tick;
+                        SetTempo(scoreEvent.Tempo);
+                        break;
+                    case EventType.Volume:
+                        HandlePlayEvent(scoreEvent.TrackId, scoreEvent, 0);
+                        break;
+                }
+
+                m_curEventIdx++;
+            }
+
+            elapsedMs += (m_curTick - lastTick) * m_period;
+            return (long)elapsedMs;
+        }
+
+        private void DrainEvents(bool playNotes)
+        {
             if (m_playerData == null)
             {
                 Logs.Write("PlayerData is null");
@@ -244,8 +317,13 @@ namespace DJMaxEditor.DJMax
                     break;
                 }
 
-                // Then the other events
-                HandlePlayEvent(scoreEvent.TrackId, scoreEvent, m_curTick - scoreEvent.Tick);
+                if (playNotes ||
+                    scoreEvent.EventType == EventType.Tempo ||
+                    scoreEvent.EventType == EventType.Volume)
+                {
+                    HandlePlayEvent(scoreEvent.TrackId, scoreEvent, m_curTick - scoreEvent.Tick);
+                }
+
                 m_curEventIdx++;
             }
         }

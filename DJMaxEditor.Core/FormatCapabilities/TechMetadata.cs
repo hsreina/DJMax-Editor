@@ -55,13 +55,14 @@ namespace DJMaxEditor.Files.Tech
         public int Bps { get; set; } = 4;
 
         /// <summary>
-        /// Maps an editor overflow track index (model tracks 9..50) to the .tech format
-        /// lane it was imported from. Lanes 0-3 are the fixed playable lanes and are not
-        /// present; a note authored on format lane 4 or higher is an invisible/autoplay
-        /// keysound lane (the format allows lanes up to 63), so each occupied lane is
-        /// compacted onto the next free model track and this map remembers its origin so
-        /// the writer can emit the same lane on save. Unused format lanes get no track and
-        /// no column.
+        /// Maps an editor accompaniment track index (BGM track 16 and keysound tracks
+        /// 20+) to the .tech format lane it was imported from. Lanes 0-3 are the fixed
+        /// playable lanes and are not present; a note authored on format lane 4 or higher
+        /// is an invisible/autoplay keysound lane (the format allows lanes up to 63,
+        /// including sparse high BGM triggers), so each occupied lane lands on the
+        /// TECHNIKA layout (16=BGM, 20+=keysound) and this map remembers its origin so
+        /// the writer can emit the same lane on save. Unused format lanes get no track
+        /// and no column.
         /// </summary>
         public Dictionary<int, int> FormatLaneByTrack { get; }
             = new Dictionary<int, int>();

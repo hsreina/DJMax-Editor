@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -21,9 +21,34 @@ namespace DJMaxEditor.DJMax
         public float Volume { get; set; }
 
         /// <summary>
-        /// List of event Events
+        /// List of event Events, ordered by tick.
+        ///
+        /// The renderers and writers enumerate every track repeatedly (the paint
+        /// loop hits all of them on every frame), so this hands out a cached
+        /// ordering instead of a lazy OrderBy - which would re-sort each track on
+        /// every single pass. The cache is rebuilt when the track mutates
+        /// (add/remove) and self-heals on in-place tick edits (drag/undo,
+        /// inspector) via the sortedness scan on the next read.
         /// </summary>
-        public IEnumerable<EventData> Events { get; private set; }
+        public IEnumerable<EventData> Events
+        {
+            get
+            {
+                List<EventData> ordered = m_orderedEvents;
+                if (m_orderDirty || !IsOrderedByVirtualTick(ordered))
+                {
+                    ordered = m_events.OrderBy(x => x.Tick).ToList();
+                    m_orderedEvents = ordered;
+                    m_orderDirty = false;
+                }
+                return ordered;
+            }
+            private set
+            {
+                m_orderedEvents = (value as List<EventData>) ?? new List<EventData>();
+                m_orderDirty = false;
+            }
+        }
 
         /// <summary>
         /// Track index
@@ -127,7 +152,23 @@ namespace DJMaxEditor.DJMax
 
         private List<EventData> m_events;
 
+        private List<EventData> m_orderedEvents = new List<EventData>();
+
+        private bool m_orderDirty;
+
         private int _maxTick = 1;
+
+        private static bool IsOrderedByVirtualTick(List<EventData> ordered)
+        {
+            for (int i = 1; i < ordered.Count; i++)
+            {
+                if (ordered[i - 1].VirtualTick > ordered[i].VirtualTick)
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
 
         private void TriggerEventAdded(EventData eventData)
         {
@@ -141,7 +182,9 @@ namespace DJMaxEditor.DJMax
 
         private void UpdateOrderedList()
         {
-            Events = m_events.OrderBy(x => x.Tick);
+            // Defer the re-sort to the next enumeration; add/remove bursts during
+            // imports would otherwise sort once per event.
+            m_orderDirty = true;
         }
 
         private void UpdateMaxTick()

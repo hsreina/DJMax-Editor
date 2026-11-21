@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Linq;
 using System.IO;
 using DJMaxEditor.Files;
@@ -64,7 +64,7 @@ namespace DJMaxEditor
                 WorkingDir = fi.DirectoryName;
                 Filename = fi.Name;
             }
-            catch (Exception e)
+            catch (Exception)
             {
                 Logs.Write("Failed to get working folder");
                 return false;
@@ -101,8 +101,6 @@ namespace DJMaxEditor
             playerData.TrackDuration = trackDuration;
             playerData.TickPerMinute = tickPerMinute;
             playerData.Tempo = tempo2;
-            playerData.HeaderEndTick = headerEndTick;
-
 
             //Logs.Write("version : {0}", version);
 
@@ -112,6 +110,9 @@ namespace DJMaxEditor
             stream.Seek(0x18);
 
             playerData.Clear();
+            // After Clear: keep the PT header end / audio length. Assign here so the authored
+            // end cannot be lost relative to refill.
+            playerData.HeaderEndTick = headerEndTick;
 
             playerData.Instruments.Add(new InstrumentData()
             {
@@ -170,7 +171,6 @@ namespace DJMaxEditor
                 {
                     Logs.Write("invalid Magic");
                     return false;
-                    break;
                 };
 
                 stream.Skip(0x02);

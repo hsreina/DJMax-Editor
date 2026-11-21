@@ -13,7 +13,16 @@ tracks 12, 13, 14, 15 :
 Player 2 extra informations
 
 track 16 : 
-main audio track
+main audio track (BGM)
 
 track 17 :
-video track
+video track (BGA)
+
+track 18 :
+speed
+
+track 19 :
+soundtrack on/off
+
+track 20+ :
+keysound / autoplay
